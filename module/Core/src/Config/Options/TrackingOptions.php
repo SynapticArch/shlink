@@ -33,8 +33,7 @@ final readonly class TrackingOptions
         public bool $disableUaTracking = false,
         // A list of IP addresses, patterns or CIDR blocks from which tracking is disabled by default
         public array $disableTrackingFrom = [],
-    ) {
-    }
+    ) {}
 
     public static function fromEnv(): self
     {
@@ -52,11 +51,19 @@ final readonly class TrackingOptions
 
     public function hasDisableTrackingFrom(): bool
     {
-        return ! empty($this->disableTrackingFrom);
+        return !empty($this->disableTrackingFrom);
     }
 
     public function queryHasDisableTrackParam(array $query): bool
     {
         return $this->disableTrackParam !== null && array_key_exists($this->disableTrackParam, $query);
+    }
+
+    /**
+     * If IP address tracking is disabled, or tracking is disabled all together, then geolocation is not relevant
+     */
+    public function isGeolocationRelevant(): bool
+    {
+        return !$this->disableTracking && !$this->disableIpTracking;
     }
 }

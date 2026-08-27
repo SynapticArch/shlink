@@ -7,6 +7,7 @@ namespace ShlinkioTest\Shlink\Rest\Action;
 use Cake\Chronos\Chronos;
 use Laminas\Diactoros\Response\JsonResponse;
 use Laminas\Diactoros\ServerRequestFactory;
+use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\MockObject\MockObject;
@@ -17,7 +18,7 @@ use Shlinkio\Shlink\Rest\Exception\MercureException;
 
 class MercureInfoActionTest extends TestCase
 {
-    private MockObject & JwtProviderInterface $provider;
+    private MockObject&JwtProviderInterface $provider;
 
     protected function setUp(): void
     {
@@ -76,5 +77,19 @@ class MercureInfoActionTest extends TestCase
     {
         yield 'days not defined' => [null];
         yield 'days defined' => [10];
+    }
+
+    #[Test, AllowMockObjectsWithoutExpectations]
+    public function getRouteDefReturnsExpectedData(): void
+    {
+        self::assertEquals(
+            [
+                'name' => MercureInfoAction::class,
+                'middleware' => [MercureInfoAction::class],
+                'path' => '/mercure-info',
+                'allowed_methods' => ['GET'],
+            ],
+            MercureInfoAction::getRouteDef(),
+        );
     }
 }

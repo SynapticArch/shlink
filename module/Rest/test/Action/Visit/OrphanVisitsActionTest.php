@@ -24,7 +24,7 @@ use function count;
 class OrphanVisitsActionTest extends TestCase
 {
     private OrphanVisitsAction $action;
-    private MockObject & VisitsStatsHelperInterface $visitsHelper;
+    private MockObject&VisitsStatsHelperInterface $visitsHelper;
 
     protected function setUp(): void
     {
@@ -35,11 +35,15 @@ class OrphanVisitsActionTest extends TestCase
     #[Test]
     public function requestIsHandled(): void
     {
-        $visitor = Visitor::emptyInstance();
+        $visitor = Visitor::empty();
         $visits = [Visit::forInvalidShortUrl($visitor), Visit::forRegularNotFound($visitor)];
-        $this->visitsHelper->expects($this->once())->method('orphanVisits')->with(
-            $this->isInstanceOf(OrphanVisitsParams::class),
-        )->willReturn(new Paginator(new ArrayAdapter($visits)));
+        $this->visitsHelper
+            ->expects($this->once())
+            ->method('orphanVisits')
+            ->with(
+                $this->isInstanceOf(OrphanVisitsParams::class),
+            )
+            ->willReturn(new Paginator(new ArrayAdapter($visits)));
         $visitsAmount = count($visits);
 
         /** @var JsonResponse $response */
@@ -55,7 +59,9 @@ class OrphanVisitsActionTest extends TestCase
     #[Test]
     public function exceptionIsThrownIfInvalidDataIsProvided(): void
     {
+        $this->visitsHelper->expects($this->never())->method('orphanVisits');
         $this->expectException(ValidationException::class);
+
         $this->action->handle(
             ServerRequestFactory::fromGlobals()
                 ->withAttribute(ApiKey::class, ApiKey::create())

@@ -7,15 +7,15 @@ namespace Shlinkio\Shlink;
 use Laminas\ConfigAggregator;
 use Laminas\Diactoros;
 use Mezzio;
-use Mezzio\ProblemDetails;
 use Shlinkio\Shlink\Core\Config\EnvVars;
 
-return (new ConfigAggregator\ConfigAggregator(
+return new ConfigAggregator\ConfigAggregator(
     providers: [
         Mezzio\ConfigProvider::class,
         Mezzio\Router\ConfigProvider::class,
         Mezzio\Router\FastRouteRouter\ConfigProvider::class,
-        ProblemDetails\ConfigProvider::class,
+        Mezzio\ProblemDetails\ConfigProvider::class,
+        Mezzio\Valinor\ConfigProvider::class,
         Diactoros\ConfigProvider::class,
         Common\ConfigProvider::class,
         Config\ConfigProvider::class,
@@ -39,4 +39,4 @@ return (new ConfigAggregator\ConfigAggregator(
         Core\Config\PostProcessor\MultiSegmentSlugProcessor::class,
         Core\Config\PostProcessor\ShortUrlMethodsProcessor::class,
     ],
-))->getMergedConfig();
+)->getMergedConfig();

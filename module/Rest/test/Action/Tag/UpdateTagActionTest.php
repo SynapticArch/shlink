@@ -11,8 +11,8 @@ use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 use Psr\Http\Message\ServerRequestInterface;
 use Shlinkio\Shlink\Core\Exception\ValidationException;
+use Shlinkio\Shlink\Core\Model\Renaming;
 use Shlinkio\Shlink\Core\Tag\Entity\Tag;
-use Shlinkio\Shlink\Core\Tag\Model\TagRenaming;
 use Shlinkio\Shlink\Core\Tag\TagServiceInterface;
 use Shlinkio\Shlink\Rest\Action\Tag\UpdateTagAction;
 use Shlinkio\Shlink\Rest\Entity\ApiKey;
@@ -20,7 +20,7 @@ use Shlinkio\Shlink\Rest\Entity\ApiKey;
 class UpdateTagActionTest extends TestCase
 {
     private UpdateTagAction $action;
-    private MockObject & TagServiceInterface $tagService;
+    private MockObject&TagServiceInterface $tagService;
 
     protected function setUp(): void
     {
@@ -33,6 +33,7 @@ class UpdateTagActionTest extends TestCase
     {
         $request = $this->requestWithApiKey()->withParsedBody($bodyParams);
 
+        $this->tagService->expects($this->never())->method('renameTag');
         $this->expectException(ValidationException::class);
 
         $this->action->handle($request);
@@ -52,10 +53,14 @@ class UpdateTagActionTest extends TestCase
             'oldName' => 'foo',
             'newName' => 'bar',
         ]);
-        $this->tagService->expects($this->once())->method('renameTag')->with(
-            TagRenaming::fromNames('foo', 'bar'),
-            $this->isInstanceOf(ApiKey::class),
-        )->willReturn(new Tag('bar'));
+        $this->tagService
+            ->expects($this->once())
+            ->method('renameTag')
+            ->with(
+                Renaming::fromNames('foo', 'bar'),
+                $this->isInstanceOf(ApiKey::class),
+            )
+            ->willReturn(new Tag('bar'));
 
         $resp = $this->action->handle($request);
 

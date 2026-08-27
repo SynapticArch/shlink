@@ -4,19 +4,29 @@ declare(strict_types=1);
 
 namespace Shlinkio\Shlink\Core;
 
+use CuyZ\Valinor\MapperBuilder;
 use Laminas\ServiceManager\AbstractFactory\ConfigAbstractFactory;
 use Laminas\ServiceManager\Factory\InvokableFactory;
 use Psr\EventDispatcher\EventDispatcherInterface;
 use Shlinkio\Shlink\Common\Doctrine\EntityRepositoryFactory;
 use Shlinkio\Shlink\Core\Config\Options\NotFoundRedirectOptions;
+use Shlinkio\Shlink\Core\Geolocation\GeolocationDbUpdater;
 use Shlinkio\Shlink\Core\ShortUrl\Helper\ShortUrlStringifier;
 use Shlinkio\Shlink\Importer\ImportedLinksProcessorInterface;
+use Shlinkio\Shlink\IpGeolocation\GeoLite2\DbUpdater;
 use Shlinkio\Shlink\IpGeolocation\Resolver\IpLocationResolverInterface;
 use Symfony\Component\Lock;
 
-return [
+use const Shlinkio\Shlink\LOCAL_LOCK_FACTORY;
 
+return [
     'dependencies' => [
+        'delegators' => [
+            MapperBuilder::class => [
+                ObjectMapper\MapperBuilderWithCacheDelegatorFactory::class,
+            ],
+        ],
+
         'factories' => [
             ErrorHandler\NotFoundTypeResolverMiddleware::class => ConfigAbstractFactory::class,
             ErrorHandler\NotFoundTrackerMiddleware::class => ConfigAbstractFactory::class,
@@ -29,9 +39,10 @@ return [
             Config\Options\RedirectOptions::class => [Config\Options\RedirectOptions::class, 'fromEnv'],
             Config\Options\UrlShortenerOptions::class => [Config\Options\UrlShortenerOptions::class, 'fromEnv'],
             Config\Options\TrackingOptions::class => [Config\Options\TrackingOptions::class, 'fromEnv'],
-            Config\Options\QrCodeOptions::class => [Config\Options\QrCodeOptions::class, 'fromEnv'],
             Config\Options\RabbitMqOptions::class => [Config\Options\RabbitMqOptions::class, 'fromEnv'],
             Config\Options\RobotsOptions::class => [Config\Options\RobotsOptions::class, 'fromEnv'],
+            Config\Options\RealTimeUpdatesOptions::class => [Config\Options\RealTimeUpdatesOptions::class, 'fromEnv'],
+            Config\Options\CorsOptions::class => [Config\Options\CorsOptions::class, 'fromEnv'],
 
             RedirectRule\ShortUrlRedirectRuleService::class => ConfigAbstractFactory::class,
             RedirectRule\ShortUrlRedirectionResolver::class => ConfigAbstractFactory::class,
@@ -50,6 +61,10 @@ return [
             ShortUrl\Transformer\ShortUrlDataTransformer::class => ConfigAbstractFactory::class,
             ShortUrl\Middleware\ExtraPathRedirectMiddleware::class => ConfigAbstractFactory::class,
             ShortUrl\Middleware\TrimTrailingSlashMiddleware::class => ConfigAbstractFactory::class,
+            ShortUrl\Repository\ShortUrlRepository::class => [
+                EntityRepositoryFactory::class,
+                ShortUrl\Entity\ShortUrl::class,
+            ],
             ShortUrl\Repository\ShortUrlListRepository::class => [
                 EntityRepositoryFactory::class,
                 ShortUrl\Entity\ShortUrl::class,
@@ -64,8 +79,10 @@ return [
             ],
 
             Tag\TagService::class => ConfigAbstractFactory::class,
+            Tag\Repository\TagRepository::class => [EntityRepositoryFactory::class, Tag\Entity\Tag::class],
 
             Domain\DomainService::class => ConfigAbstractFactory::class,
+            Domain\Repository\DomainRepository::class => [EntityRepositoryFactory::class, Domain\Entity\Domain::class],
 
             Visit\VisitsTracker::class => ConfigAbstractFactory::class,
             Visit\RequestTracker::class => ConfigAbstractFactory::class,
@@ -91,10 +108,12 @@ return [
 
             Action\RedirectAction::class => ConfigAbstractFactory::class,
             Action\PixelAction::class => ConfigAbstractFactory::class,
-            Action\QrCodeAction::class => ConfigAbstractFactory::class,
             Action\RobotsAction::class => ConfigAbstractFactory::class,
 
             EventDispatcher\PublishingUpdatesGenerator::class => ConfigAbstractFactory::class,
+
+            Geolocation\GeolocationDbUpdater::class => ConfigAbstractFactory::class,
+            Geolocation\Middleware\IpGeolocationMiddleware::class => ConfigAbstractFactory::class,
 
             Importer\ImportedLinksProcessor::class => ConfigAbstractFactory::class,
 
@@ -132,6 +151,7 @@ return [
             ShortUrl\Resolver\PersistenceShortUrlRelationResolver::class,
             ShortUrl\Helper\ShortCodeUniquenessHelper::class,
             EventDispatcherInterface::class,
+            ShortUrl\Repository\ShortUrlRepository::class,
         ],
         Visit\VisitsTracker::class => [
             'em',
@@ -152,21 +172,31 @@ return [
         ],
         Visit\Geolocation\VisitLocator::class => ['em', Visit\Repository\VisitIterationRepository::class],
         Visit\Geolocation\VisitToLocationHelper::class => [IpLocationResolverInterface::class],
-        Visit\VisitsStatsHelper::class => ['em'],
-        Tag\TagService::class => ['em'],
+        Visit\VisitsStatsHelper::class => ['em', Config\Options\UrlShortenerOptions::class],
+        Tag\TagService::class => ['em', Tag\Repository\TagRepository::class],
         ShortUrl\DeleteShortUrlService::class => [
             'em',
             Config\Options\DeleteShortUrlsOptions::class,
             ShortUrl\ShortUrlResolver::class,
             ShortUrl\Repository\ExpiredShortUrlsRepository::class,
         ],
-        ShortUrl\ShortUrlResolver::class => ['em', Config\Options\UrlShortenerOptions::class],
+        ShortUrl\ShortUrlResolver::class => [
+            ShortUrl\Repository\ShortUrlRepository::class,
+            Config\Options\UrlShortenerOptions::class,
+        ],
         ShortUrl\ShortUrlVisitsDeleter::class => [
             Visit\Repository\VisitDeleterRepository::class,
             ShortUrl\ShortUrlResolver::class,
         ],
-        ShortUrl\Helper\ShortCodeUniquenessHelper::class => ['em', Config\Options\UrlShortenerOptions::class],
-        Domain\DomainService::class => ['em', Config\Options\UrlShortenerOptions::class],
+        ShortUrl\Helper\ShortCodeUniquenessHelper::class => [
+            ShortUrl\Repository\ShortUrlRepository::class,
+            Config\Options\UrlShortenerOptions::class,
+        ],
+        Domain\DomainService::class => [
+            'em',
+            Config\Options\UrlShortenerOptions::class,
+            Domain\Repository\DomainRepository::class,
+        ],
 
         Util\DoctrineBatchHelper::class => ['em'],
         Util\RedirectResponseHelper::class => [Config\Options\RedirectOptions::class],
@@ -183,12 +213,6 @@ return [
             Util\RedirectResponseHelper::class,
         ],
         Action\PixelAction::class => [ShortUrl\ShortUrlResolver::class, Visit\RequestTracker::class],
-        Action\QrCodeAction::class => [
-            ShortUrl\ShortUrlResolver::class,
-            ShortUrl\Helper\ShortUrlStringifier::class,
-            'Logger_Shlink',
-            Config\Options\QrCodeOptions::class,
-        ],
         Action\RobotsAction::class => [Crawling\CrawlingHelper::class, Config\Options\RobotsOptions::class],
 
         ShortUrl\Resolver\PersistenceShortUrlRelationResolver::class => [
@@ -203,6 +227,7 @@ return [
         ShortUrl\Helper\ShortUrlTitleResolutionHelper::class => [
             'httpClient',
             Config\Options\UrlShortenerOptions::class,
+            'Logger_Shlink',
         ],
         ShortUrl\Helper\ShortUrlRedirectionBuilder::class => [
             Config\Options\TrackingOptions::class,
@@ -220,14 +245,27 @@ return [
 
         EventDispatcher\PublishingUpdatesGenerator::class => [ShortUrl\Transformer\ShortUrlDataTransformer::class],
 
+        GeolocationDbUpdater::class => [
+            DbUpdater::class,
+            LOCAL_LOCK_FACTORY,
+            Config\Options\TrackingOptions::class,
+            'em',
+        ],
+        Geolocation\Middleware\IpGeolocationMiddleware::class => [
+            IpLocationResolverInterface::class,
+            DbUpdater::class,
+            'Logger_Shlink',
+            Config\Options\TrackingOptions::class,
+        ],
+
         Importer\ImportedLinksProcessor::class => [
             'em',
             ShortUrl\Resolver\PersistenceShortUrlRelationResolver::class,
             ShortUrl\Helper\ShortCodeUniquenessHelper::class,
             Util\DoctrineBatchHelper::class,
+            RedirectRule\ShortUrlRedirectRuleService::class,
         ],
 
         Crawling\CrawlingHelper::class => [ShortUrl\Repository\CrawlableShortCodesQuery::class],
     ],
-
 ];

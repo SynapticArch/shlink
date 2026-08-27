@@ -8,6 +8,7 @@ use Fig\Http\Message\RequestMethodInterface;
 use RKA\Middleware\IpAddress;
 use Shlinkio\Shlink\Core\Action as CoreAction;
 use Shlinkio\Shlink\Core\Config\EnvVars;
+use Shlinkio\Shlink\Core\Geolocation\Middleware\IpGeolocationMiddleware;
 use Shlinkio\Shlink\Core\ShortUrl\Middleware\TrimTrailingSlashMiddleware;
 use Shlinkio\Shlink\Rest\Action;
 use Shlinkio\Shlink\Rest\ConfigProvider;
@@ -19,10 +20,10 @@ use function sprintf;
 return (static function (): array {
     $dropDomainMiddleware = Middleware\ShortUrl\DropDefaultDomainFromRequestMiddleware::class;
     $overrideDomainMiddleware = Middleware\ShortUrl\OverrideDomainMiddleware::class;
+    $shortUrlOptionsPayloadMiddleware = Middleware\ShortUrl\ShortUrlOptionsPayloadMiddleware::class;
     $shortUrlRouteSuffix = EnvVars::SHORT_URL_TRAILING_SLASH->loadFromEnv() ? '[/]' : '';
 
     return [
-
         // The order of the routes defined here matters. Changing it might cause path conflicts
         'routes' => [
             // Rest
@@ -50,11 +51,12 @@ return (static function (): array {
                 Action\ShortUrl\CreateShortUrlAction::getRouteDef([
                     $dropDomainMiddleware,
                     $overrideDomainMiddleware,
-                    Middleware\ShortUrl\DefaultShortCodesLengthMiddleware::class,
+                    $shortUrlOptionsPayloadMiddleware,
                 ]),
                 Action\ShortUrl\SingleStepCreateShortUrlAction::getRouteDef([
                     Middleware\ShortUrl\CreateShortUrlContentNegotiationMiddleware::class,
                     $overrideDomainMiddleware,
+                    $shortUrlOptionsPayloadMiddleware,
                 ]),
                 Action\ShortUrl\EditShortUrlAction::getRouteDef([$dropDomainMiddleware]),
                 Action\ShortUrl\DeleteShortUrlAction::getRouteDef([$dropDomainMiddleware]),
@@ -88,15 +90,8 @@ return (static function (): array {
                 'path' => '/{shortCode}/track',
                 'middleware' => [
                     IpAddress::class,
+                    IpGeolocationMiddleware::class,
                     CoreAction\PixelAction::class,
-                ],
-                'allowed_methods' => [RequestMethodInterface::METHOD_GET],
-            ],
-            [
-                'name' => CoreAction\QrCodeAction::class,
-                'path' => '/{shortCode}/qr-code',
-                'middleware' => [
-                    CoreAction\QrCodeAction::class,
                 ],
                 'allowed_methods' => [RequestMethodInterface::METHOD_GET],
             ],
@@ -105,12 +100,12 @@ return (static function (): array {
                 'path' => sprintf('/{shortCode}%s', $shortUrlRouteSuffix),
                 'middleware' => [
                     IpAddress::class,
+                    IpGeolocationMiddleware::class,
                     TrimTrailingSlashMiddleware::class,
                     CoreAction\RedirectAction::class,
                 ],
                 'allowed_methods' => [RequestMethodInterface::METHOD_GET],
             ],
         ],
-
     ];
 })();

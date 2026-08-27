@@ -11,7 +11,7 @@ use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
-use Shlinkio\Shlink\Core\EventDispatcher\Event\VisitLocated;
+use Shlinkio\Shlink\Core\EventDispatcher\Event\UrlVisited;
 use Shlinkio\Shlink\Core\EventDispatcher\Matomo\SendVisitToMatomo;
 use Shlinkio\Shlink\Core\Matomo\MatomoOptions;
 use Shlinkio\Shlink\Core\Matomo\MatomoVisitSenderInterface;
@@ -20,9 +20,9 @@ use Shlinkio\Shlink\Core\Visit\Model\Visitor;
 
 class SendVisitToMatomoTest extends TestCase
 {
-    private MockObject & EntityManagerInterface $em;
-    private MockObject & LoggerInterface $logger;
-    private MockObject & MatomoVisitSenderInterface $visitSender;
+    private MockObject&EntityManagerInterface $em;
+    private MockObject&LoggerInterface $logger;
+    private MockObject&MatomoVisitSenderInterface $visitSender;
 
     protected function setUp(): void
     {
@@ -39,7 +39,7 @@ class SendVisitToMatomoTest extends TestCase
         $this->logger->expects($this->never())->method('error');
         $this->logger->expects($this->never())->method('warning');
 
-        ($this->listener(enabled: false))(new VisitLocated('123'));
+        $this->listener(enabled: false)(new UrlVisited('123'));
     }
 
     #[Test]
@@ -48,26 +48,29 @@ class SendVisitToMatomoTest extends TestCase
         $this->em->expects($this->once())->method('find')->willReturn(null);
         $this->visitSender->expects($this->never())->method('sendVisit');
         $this->logger->expects($this->never())->method('error');
-        $this->logger->expects($this->once())->method('warning')->with(
-            'Tried to send visit with id "{visitId}" to matomo, but it does not exist.',
-            ['visitId' => '123'],
-        );
+        $this->logger
+            ->expects($this->once())
+            ->method('warning')
+            ->with(
+                'Tried to send visit with id "{visitId}" to matomo, but it does not exist.',
+                ['visitId' => '123'],
+            );
 
-        ($this->listener())(new VisitLocated('123'));
+        $this->listener()(new UrlVisited('123'));
     }
 
     #[Test, DataProvider('provideOriginalIpAddress')]
     public function visitIsSentWhenItExists(string|null $originalIpAddress): void
     {
         $visitId = '123';
-        $visit = Visit::forBasePath(Visitor::emptyInstance());
+        $visit = Visit::forBasePath(Visitor::empty());
 
         $this->em->expects($this->once())->method('find')->with(Visit::class, $visitId)->willReturn($visit);
         $this->visitSender->expects($this->once())->method('sendVisit')->with($visit, $originalIpAddress);
         $this->logger->expects($this->never())->method('error');
         $this->logger->expects($this->never())->method('warning');
 
-        ($this->listener())(new VisitLocated($visitId, $originalIpAddress));
+        $this->listener()(new UrlVisited($visitId, $originalIpAddress));
     }
 
     public static function provideOriginalIpAddress(): iterable
@@ -82,17 +85,24 @@ class SendVisitToMatomoTest extends TestCase
         $visitId = '123';
         $e = new Exception('Error!');
 
-        $this->em->expects($this->once())->method('find')->with(Visit::class, $visitId)->willReturn(
-            $this->createMock(Visit::class),
-        );
+        $this->em
+            ->expects($this->once())
+            ->method('find')
+            ->with(Visit::class, $visitId)
+            ->willReturn(
+                $this->createStub(Visit::class),
+            );
         $this->visitSender->expects($this->once())->method('sendVisit')->willThrowException($e);
         $this->logger->expects($this->never())->method('warning');
-        $this->logger->expects($this->once())->method('error')->with(
-            'An error occurred while trying to send visit to Matomo. {e}',
-            ['e' => $e],
-        );
+        $this->logger
+            ->expects($this->once())
+            ->method('error')
+            ->with(
+                'An error occurred while trying to send visit to Matomo. {e}',
+                ['e' => $e],
+            );
 
-        ($this->listener())(new VisitLocated($visitId));
+        $this->listener()(new UrlVisited($visitId));
     }
 
     private function listener(bool $enabled = true): SendVisitToMatomo

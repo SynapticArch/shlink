@@ -15,8 +15,8 @@ use Shlinkio\Shlink\Core\Visit\Model\VisitType;
 use Shlinkio\Shlink\Importer\Model\ImportedShlinkOrphanVisit;
 use Shlinkio\Shlink\Importer\Model\ImportedShlinkVisit;
 
+use function Shlinkio\Shlink\Common\normalizeDate;
 use function Shlinkio\Shlink\Core\isCrawler;
-use function Shlinkio\Shlink\Core\normalizeDate;
 
 class Visit extends AbstractEntity implements JsonSerializable
 {
@@ -28,10 +28,10 @@ class Visit extends AbstractEntity implements JsonSerializable
         public readonly bool $potentialBot,
         public readonly string|null $remoteAddr = null,
         public readonly string|null $visitedUrl = null,
-        private VisitLocation|null $visitLocation = null,
+        public readonly string|null $redirectUrl = null,
+        private(set) VisitLocation|null $visitLocation = null,
         public readonly Chronos $date = new Chronos(),
-    ) {
-    }
+    ) {}
 
     public static function forValidShortUrl(ShortUrl $shortUrl, Visitor $visitor, bool $anonymize = true): self
     {
@@ -59,21 +59,24 @@ class Visit extends AbstractEntity implements JsonSerializable
         Visitor $visitor,
         bool $anonymize,
     ): self {
+        $geolocation = $visitor->geolocation;
         return new self(
             shortUrl: $shortUrl,
             type: $type,
             userAgent: $visitor->userAgent,
             referer: $visitor->referer,
-            potentialBot: $visitor->isPotentialBot(),
+            potentialBot: $visitor->potentialBot,
             remoteAddr: self::processAddress($visitor->remoteAddress, $anonymize),
             visitedUrl: $visitor->visitedUrl,
+            redirectUrl: $visitor->redirectUrl,
+            visitLocation: $geolocation !== null ? VisitLocation::fromLocation($geolocation) : null,
         );
     }
 
     private static function processAddress(string|null $address, bool $anonymize): string|null
     {
         // Localhost address does not need to be anonymized
-        if (! $anonymize || $address === null || $address === IpAddress::LOCALHOST) {
+        if (!$anonymize || $address === null || $address === IpAddress::LOCALHOST) {
             return $address;
         }
 
@@ -110,24 +113,14 @@ class Visit extends AbstractEntity implements JsonSerializable
             referer: $importedVisit->referer,
             potentialBot: isCrawler($importedVisit->userAgent),
             visitedUrl: $importedVisit instanceof ImportedShlinkOrphanVisit ? $importedVisit->visitedUrl : null,
-            visitLocation: $importedLocation !== null ? VisitLocation::fromImport($importedLocation) : null,
+            visitLocation: $importedLocation !== null ? VisitLocation::fromLocation($importedLocation) : null,
             date: normalizeDate($importedVisit->date),
         );
     }
 
     public function hasRemoteAddr(): bool
     {
-        return ! empty($this->remoteAddr);
-    }
-
-    public function getVisitLocation(): VisitLocation|null
-    {
-        return $this->visitLocation;
-    }
-
-    public function isLocatable(): bool
-    {
-        return $this->hasRemoteAddr() && $this->remoteAddr !== IpAddress::LOCALHOST;
+        return !empty($this->remoteAddr);
     }
 
     public function locate(VisitLocation $visitLocation): self
@@ -159,8 +152,9 @@ class Visit extends AbstractEntity implements JsonSerializable
             'visitLocation' => $this->visitLocation,
             'potentialBot' => $this->potentialBot,
             'visitedUrl' => $this->visitedUrl,
+            'redirectUrl' => $this->redirectUrl,
         ];
-        if (! $this->isOrphan()) {
+        if (!$this->isOrphan()) {
             return $base;
         }
 

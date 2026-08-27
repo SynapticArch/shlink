@@ -12,7 +12,6 @@ use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 use Psr\Http\Message\ServerRequestInterface;
-use Shlinkio\Shlink\Common\Middleware\IpAddressMiddlewareFactory;
 use Shlinkio\Shlink\Core\Config\Options\TrackingOptions;
 use Shlinkio\Shlink\Core\ErrorHandler\Model\NotFoundType;
 use Shlinkio\Shlink\Core\ShortUrl\Entity\ShortUrl;
@@ -20,13 +19,15 @@ use Shlinkio\Shlink\Core\Visit\Model\Visitor;
 use Shlinkio\Shlink\Core\Visit\RequestTracker;
 use Shlinkio\Shlink\Core\Visit\VisitsTrackerInterface;
 
+use const Shlinkio\Shlink\IP_ADDRESS_REQUEST_ATTRIBUTE;
+
 class RequestTrackerTest extends TestCase
 {
-    private const LONG_URL = 'https://domain.com/foo/bar?some=thing';
+    private const string LONG_URL = 'https://domain.com/foo/bar?some=thing';
 
     private RequestTracker $requestTracker;
-    private MockObject & VisitsTrackerInterface $visitsTracker;
-    private MockObject & NotFoundType $notFoundType;
+    private MockObject&VisitsTrackerInterface $visitsTracker;
+    private MockObject&NotFoundType $notFoundType;
     private ServerRequestInterface $request;
 
     protected function setUp(): void
@@ -51,6 +52,9 @@ class RequestTrackerTest extends TestCase
     public function trackingIsDisabledWhenRequestDoesNotMeetConditions(ServerRequestInterface $request): void
     {
         $this->visitsTracker->expects($this->never())->method('track');
+        $this->notFoundType->expects($this->never())->method('isBaseUrl');
+        $this->notFoundType->expects($this->never())->method('isRegularNotFound');
+        $this->notFoundType->expects($this->never())->method('isInvalidShortUrl');
 
         $shortUrl = ShortUrl::withLongUrl(self::LONG_URL);
         $this->requestTracker->trackIfApplicable($shortUrl, $request);
@@ -67,15 +71,15 @@ class RequestTrackerTest extends TestCase
             ServerRequestFactory::fromGlobals()->withQueryParams(['foobar' => null]),
         ];
         yield 'exact remote address' => [ServerRequestFactory::fromGlobals()->withAttribute(
-            IpAddressMiddlewareFactory::REQUEST_ATTR,
+            IP_ADDRESS_REQUEST_ATTRIBUTE,
             '80.90.100.110',
         )];
         yield 'matching wildcard remote address' => [ServerRequestFactory::fromGlobals()->withAttribute(
-            IpAddressMiddlewareFactory::REQUEST_ATTR,
+            IP_ADDRESS_REQUEST_ATTRIBUTE,
             '1.2.3.4',
         )];
         yield 'matching CIDR block remote address' => [ServerRequestFactory::fromGlobals()->withAttribute(
-            IpAddressMiddlewareFactory::REQUEST_ATTR,
+            IP_ADDRESS_REQUEST_ATTRIBUTE,
             '192.168.10.100',
         )];
     }
@@ -84,10 +88,16 @@ class RequestTrackerTest extends TestCase
     public function trackingHappensOverShortUrlsWhenRequestMeetsConditions(): void
     {
         $shortUrl = ShortUrl::withLongUrl(self::LONG_URL);
-        $this->visitsTracker->expects($this->once())->method('track')->with(
-            $shortUrl,
-            $this->isInstanceOf(Visitor::class),
-        );
+        $this->visitsTracker
+            ->expects($this->once())
+            ->method('track')
+            ->with(
+                $shortUrl,
+                $this->isInstanceOf(Visitor::class),
+            );
+        $this->notFoundType->expects($this->never())->method('isBaseUrl');
+        $this->notFoundType->expects($this->never())->method('isRegularNotFound');
+        $this->notFoundType->expects($this->never())->method('isInvalidShortUrl');
 
         $this->requestTracker->trackIfApplicable($shortUrl, $this->request);
     }
@@ -96,13 +106,19 @@ class RequestTrackerTest extends TestCase
     public function trackingHappensOverShortUrlsWhenRemoteAddressIsInvalid(): void
     {
         $shortUrl = ShortUrl::withLongUrl(self::LONG_URL);
-        $this->visitsTracker->expects($this->once())->method('track')->with(
-            $shortUrl,
-            $this->isInstanceOf(Visitor::class),
-        );
+        $this->visitsTracker
+            ->expects($this->once())
+            ->method('track')
+            ->with(
+                $shortUrl,
+                $this->isInstanceOf(Visitor::class),
+            );
+        $this->notFoundType->expects($this->never())->method('isBaseUrl');
+        $this->notFoundType->expects($this->never())->method('isRegularNotFound');
+        $this->notFoundType->expects($this->never())->method('isInvalidShortUrl');
 
         $this->requestTracker->trackIfApplicable($shortUrl, ServerRequestFactory::fromGlobals()->withAttribute(
-            IpAddressMiddlewareFactory::REQUEST_ATTR,
+            IP_ADDRESS_REQUEST_ATTRIBUTE,
             'invalid',
         ));
     }
@@ -113,9 +129,12 @@ class RequestTrackerTest extends TestCase
         $this->notFoundType->expects($this->once())->method('isBaseUrl')->willReturn(true);
         $this->notFoundType->expects($this->never())->method('isRegularNotFound');
         $this->notFoundType->expects($this->never())->method('isInvalidShortUrl');
-        $this->visitsTracker->expects($this->once())->method('trackBaseUrlVisit')->with(
-            $this->isInstanceOf(Visitor::class),
-        );
+        $this->visitsTracker
+            ->expects($this->once())
+            ->method('trackBaseUrlVisit')
+            ->with(
+                $this->isInstanceOf(Visitor::class),
+            );
         $this->visitsTracker->expects($this->never())->method('trackRegularNotFoundVisit');
         $this->visitsTracker->expects($this->never())->method('trackInvalidShortUrlVisit');
 
@@ -129,9 +148,12 @@ class RequestTrackerTest extends TestCase
         $this->notFoundType->expects($this->once())->method('isRegularNotFound')->willReturn(true);
         $this->notFoundType->expects($this->never())->method('isInvalidShortUrl');
         $this->visitsTracker->expects($this->never())->method('trackBaseUrlVisit');
-        $this->visitsTracker->expects($this->once())->method('trackRegularNotFoundVisit')->with(
-            $this->isInstanceOf(Visitor::class),
-        );
+        $this->visitsTracker
+            ->expects($this->once())
+            ->method('trackRegularNotFoundVisit')
+            ->with(
+                $this->isInstanceOf(Visitor::class),
+            );
         $this->visitsTracker->expects($this->never())->method('trackInvalidShortUrlVisit');
 
         $this->requestTracker->trackNotFoundIfApplicable($this->request);
@@ -145,9 +167,12 @@ class RequestTrackerTest extends TestCase
         $this->notFoundType->expects($this->once())->method('isInvalidShortUrl')->willReturn(true);
         $this->visitsTracker->expects($this->never())->method('trackBaseUrlVisit');
         $this->visitsTracker->expects($this->never())->method('trackRegularNotFoundVisit');
-        $this->visitsTracker->expects($this->once())->method('trackInvalidShortUrlVisit')->with(
-            $this->isInstanceOf(Visitor::class),
-        );
+        $this->visitsTracker
+            ->expects($this->once())
+            ->method('trackInvalidShortUrlVisit')
+            ->with(
+                $this->isInstanceOf(Visitor::class),
+            );
 
         $this->requestTracker->trackNotFoundIfApplicable($this->request);
     }
@@ -158,6 +183,9 @@ class RequestTrackerTest extends TestCase
         $this->visitsTracker->expects($this->never())->method('trackBaseUrlVisit');
         $this->visitsTracker->expects($this->never())->method('trackRegularNotFoundVisit');
         $this->visitsTracker->expects($this->never())->method('trackInvalidShortUrlVisit');
+        $this->notFoundType->expects($this->never())->method('isBaseUrl');
+        $this->notFoundType->expects($this->never())->method('isRegularNotFound');
+        $this->notFoundType->expects($this->never())->method('isInvalidShortUrl');
 
         $this->requestTracker->trackNotFoundIfApplicable($request);
     }

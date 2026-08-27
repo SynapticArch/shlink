@@ -11,14 +11,15 @@ use Shlinkio\Shlink\Core\Visit\Entity\Visit;
 use Shlinkio\Shlink\Core\Visit\Repository\VisitIterationRepositoryInterface;
 use Throwable;
 
+use function strtolower;
+
 readonly class MatomoVisitSender implements MatomoVisitSenderInterface
 {
     public function __construct(
         private MatomoTrackerBuilderInterface $trackerBuilder,
         private ShortUrlStringifier $shortUrlStringifier,
         private VisitIterationRepositoryInterface $visitIterationRepository,
-    ) {
-    }
+    ) {}
 
     /**
      * Sends all visits in provided date range to matomo, and returns the amount of affected visits
@@ -56,11 +57,11 @@ readonly class MatomoVisitSender implements MatomoVisitSenderInterface
             ->setUrlReferrer($visit->referer)
             ->setForceVisitDateTime($visit->date->setTimezone('UTC')->toDateTimeString());
 
-        $location = $visit->getVisitLocation();
+        $location = $visit->visitLocation;
         if ($location !== null) {
             $tracker
                 ->setCity($location->cityName)
-                ->setCountry($location->countryName)
+                ->setCountry(strtolower($location->countryCode))
                 ->setLatitude($location->latitude)
                 ->setLongitude($location->longitude);
         }
@@ -76,7 +77,7 @@ readonly class MatomoVisitSender implements MatomoVisitSenderInterface
         }
 
         // Send the short URL title or an empty document title to avoid different actions to be created by matomo
-        $tracker->doTrackPageView($visit->shortUrl?->title() ?? '');
+        $tracker->doTrackPageView($visit->shortUrl->title ?? '');
     }
 
     private function resolveUrlToTrack(Visit $visit): string

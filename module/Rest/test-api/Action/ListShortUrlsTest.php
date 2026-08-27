@@ -15,7 +15,7 @@ use function count;
 
 class ListShortUrlsTest extends ApiTestCase
 {
-    private const SHORT_URL_SHLINK_WITH_TITLE = [
+    private const array SHORT_URL_SHLINK_WITH_TITLE = [
         'shortCode' => 'abc123',
         'shortUrl' => 'http://s.test/abc123',
         'longUrl' => 'https://shlink.io',
@@ -37,7 +37,7 @@ class ListShortUrlsTest extends ApiTestCase
         'forwardQuery' => true,
         'hasRedirectRules' => false,
     ];
-    private const SHORT_URL_DOCS = [
+    private const array SHORT_URL_DOCS = [
         'shortCode' => 'ghi789',
         'shortUrl' => 'http://s.test/ghi789',
         'longUrl' => 'https://shlink.io/documentation/',
@@ -59,7 +59,7 @@ class ListShortUrlsTest extends ApiTestCase
         'forwardQuery' => true,
         'hasRedirectRules' => false,
     ];
-    private const SHORT_URL_CUSTOM_SLUG_AND_DOMAIN = [
+    private const array SHORT_URL_CUSTOM_SLUG_AND_DOMAIN = [
         'shortCode' => 'custom-with-domain',
         'shortUrl' => 'http://some-domain.com/custom-with-domain',
         'longUrl' => 'https://google.com',
@@ -81,12 +81,10 @@ class ListShortUrlsTest extends ApiTestCase
         'forwardQuery' => true,
         'hasRedirectRules' => false,
     ];
-    private const SHORT_URL_META = [
+    private const array SHORT_URL_META = [
         'shortCode' => 'def456',
         'shortUrl' => 'http://s.test/def456',
-        'longUrl' =>
-            'https://blog.alejandrocelaya.com/2017/12/09'
-            . '/acmailer-7-0-the-most-important-release-in-a-long-time/',
+        'longUrl' => 'https://blog.alejandrocelaya.com/2017/12/09/acmailer-7-0-the-most-important-release-in-a-long-time/',
         'dateCreated' => '2019-01-01T00:00:10+00:00',
         'visitsSummary' => [
             'total' => 2,
@@ -105,7 +103,7 @@ class ListShortUrlsTest extends ApiTestCase
         'forwardQuery' => true,
         'hasRedirectRules' => true,
     ];
-    private const SHORT_URL_CUSTOM_SLUG = [
+    private const array SHORT_URL_CUSTOM_SLUG = [
         'shortCode' => 'custom',
         'shortUrl' => 'http://s.test/custom',
         'longUrl' => 'https://shlink.io',
@@ -127,12 +125,12 @@ class ListShortUrlsTest extends ApiTestCase
         'forwardQuery' => false,
         'hasRedirectRules' => false,
     ];
-    private const SHORT_URL_CUSTOM_DOMAIN = [
+    private const array SHORT_URL_CUSTOM_DOMAIN = [
         'shortCode' => 'ghi789',
         'shortUrl' => 'http://example.com/ghi789',
         'longUrl' =>
             'https://blog.alejandrocelaya.com/2019/04/27'
-            . '/considerations-to-properly-use-open-source-software-projects/',
+                . '/considerations-to-properly-use-open-source-software-projects/',
         'dateCreated' => '2019-01-01T00:00:30+00:00',
         'visitsSummary' => [
             'total' => 0,
@@ -153,135 +151,268 @@ class ListShortUrlsTest extends ApiTestCase
     ];
 
     #[Test, DataProvider('provideFilteredLists')]
-    public function shortUrlsAreProperlyListed(array $query, array $expectedShortUrls, string $apiKey): void
-    {
+    public function shortUrlsAreProperlyListed(
+        array $query,
+        array $expectedShortUrls,
+        string $apiKey = 'valid_api_key',
+    ): void {
         $resp = $this->callApiWithKey(self::METHOD_GET, '/short-urls', [RequestOptions::QUERY => $query], $apiKey);
         $respPayload = $this->getJsonResponsePayload($resp);
 
         self::assertEquals(self::STATUS_OK, $resp->getStatusCode());
-        self::assertEquals([
-            'shortUrls' => [
-                'data' => $expectedShortUrls,
-                'pagination' => $this->buildPagination(count($expectedShortUrls)),
+        self::assertEquals(
+            [
+                'shortUrls' => [
+                    'data' => $expectedShortUrls,
+                    'pagination' => $this->buildPagination(count($expectedShortUrls)),
+                ],
             ],
-        ], $respPayload);
+            $respPayload,
+        );
     }
 
     public static function provideFilteredLists(): iterable
     {
-        yield [[], [
-            self::SHORT_URL_CUSTOM_DOMAIN,
-            self::SHORT_URL_CUSTOM_SLUG,
-            self::SHORT_URL_META,
-            self::SHORT_URL_CUSTOM_SLUG_AND_DOMAIN,
-            self::SHORT_URL_SHLINK_WITH_TITLE,
-            self::SHORT_URL_DOCS,
-        ], 'valid_api_key'];
-        yield [['excludePastValidUntil' => 'true'], [
-            self::SHORT_URL_CUSTOM_DOMAIN,
-            self::SHORT_URL_CUSTOM_SLUG,
-            self::SHORT_URL_META,
-            self::SHORT_URL_CUSTOM_SLUG_AND_DOMAIN,
-            self::SHORT_URL_SHLINK_WITH_TITLE,
-        ], 'valid_api_key'];
-        yield [['excludeMaxVisitsReached' => 'true'], [
-            self::SHORT_URL_CUSTOM_DOMAIN,
-            self::SHORT_URL_CUSTOM_SLUG,
-            self::SHORT_URL_META,
-            self::SHORT_URL_CUSTOM_SLUG_AND_DOMAIN,
-            self::SHORT_URL_DOCS,
-        ], 'valid_api_key'];
-        yield [['orderBy' => 'shortCode'], [
-            self::SHORT_URL_SHLINK_WITH_TITLE,
-            self::SHORT_URL_CUSTOM_SLUG,
-            self::SHORT_URL_CUSTOM_SLUG_AND_DOMAIN,
-            self::SHORT_URL_META,
-            self::SHORT_URL_DOCS,
-            self::SHORT_URL_CUSTOM_DOMAIN,
-        ], 'valid_api_key'];
-        yield [['orderBy' => 'shortCode-DESC'], [
-            self::SHORT_URL_DOCS,
-            self::SHORT_URL_CUSTOM_DOMAIN,
-            self::SHORT_URL_META,
-            self::SHORT_URL_CUSTOM_SLUG_AND_DOMAIN,
-            self::SHORT_URL_CUSTOM_SLUG,
-            self::SHORT_URL_SHLINK_WITH_TITLE,
-        ], 'valid_api_key'];
-        yield [['orderBy' => 'title-DESC'], [
-            self::SHORT_URL_SHLINK_WITH_TITLE,
-            self::SHORT_URL_META,
-            self::SHORT_URL_CUSTOM_SLUG,
-            self::SHORT_URL_DOCS,
-            self::SHORT_URL_CUSTOM_DOMAIN,
-            self::SHORT_URL_CUSTOM_SLUG_AND_DOMAIN,
-        ], 'valid_api_key'];
-        yield [['startDate' => Chronos::parse('2018-12-01')->toAtomString()], [
-            self::SHORT_URL_CUSTOM_DOMAIN,
-            self::SHORT_URL_CUSTOM_SLUG,
-            self::SHORT_URL_META,
-        ], 'valid_api_key'];
-        yield [['endDate' => Chronos::parse('2018-12-01')->toAtomString()], [
-            self::SHORT_URL_CUSTOM_SLUG_AND_DOMAIN,
-            self::SHORT_URL_SHLINK_WITH_TITLE,
-            self::SHORT_URL_DOCS,
-        ], 'valid_api_key'];
-        yield [['tags' => ['foo']], [
-            self::SHORT_URL_CUSTOM_DOMAIN,
-            self::SHORT_URL_META,
-            self::SHORT_URL_SHLINK_WITH_TITLE,
-        ], 'valid_api_key'];
-        yield [['tags' => ['bar']], [
-            self::SHORT_URL_META,
-        ], 'valid_api_key'];
-        yield [['tags' => ['foo', 'bar']], [
-            self::SHORT_URL_CUSTOM_DOMAIN,
-            self::SHORT_URL_META,
-            self::SHORT_URL_SHLINK_WITH_TITLE,
-        ], 'valid_api_key'];
-        yield [['tags' => ['foo', 'bar'], 'tagsMode' => 'any'], [
-            self::SHORT_URL_CUSTOM_DOMAIN,
-            self::SHORT_URL_META,
-            self::SHORT_URL_SHLINK_WITH_TITLE,
-        ], 'valid_api_key'];
-        yield [['tags' => ['foo', 'bar'], 'tagsMode' => 'all'], [
-            self::SHORT_URL_META,
-        ], 'valid_api_key'];
-        yield [['tags' => ['foo', 'bar', 'baz']], [
-            self::SHORT_URL_CUSTOM_DOMAIN,
-            self::SHORT_URL_META,
-            self::SHORT_URL_SHLINK_WITH_TITLE,
-        ], 'valid_api_key'];
-        yield [['tags' => ['foo', 'bar', 'baz'], 'tagsMode' => 'all'], [], 'valid_api_key'];
-        yield [['tags' => ['foo'], 'endDate' => Chronos::parse('2018-12-01')->toAtomString()], [
-            self::SHORT_URL_SHLINK_WITH_TITLE,
-        ], 'valid_api_key'];
-        yield [['searchTerm' => 'alejandro'], [
-            self::SHORT_URL_CUSTOM_DOMAIN,
-            self::SHORT_URL_META,
-        ], 'valid_api_key'];
-        yield [['searchTerm' => 'cool'], [
-            self::SHORT_URL_SHLINK_WITH_TITLE,
-        ], 'valid_api_key'];
-        yield [['searchTerm' => 'example.com'], [
-            self::SHORT_URL_CUSTOM_DOMAIN,
-        ], 'valid_api_key'];
-        yield [['domain' => 'example.com'], [
-            self::SHORT_URL_CUSTOM_DOMAIN,
-        ], 'valid_api_key'];
-        yield [['domain' => Domain::DEFAULT_AUTHORITY], [
-            self::SHORT_URL_CUSTOM_SLUG,
-            self::SHORT_URL_META,
-            self::SHORT_URL_SHLINK_WITH_TITLE,
-            self::SHORT_URL_DOCS,
-        ], 'valid_api_key'];
-        yield [[], [
-            self::SHORT_URL_CUSTOM_SLUG,
-            self::SHORT_URL_META,
-            self::SHORT_URL_SHLINK_WITH_TITLE,
-        ], 'author_api_key'];
-        yield [[], [
-            self::SHORT_URL_CUSTOM_DOMAIN,
-        ], 'domain_api_key'];
+        yield [
+            [],
+            [
+                self::SHORT_URL_CUSTOM_DOMAIN,
+                self::SHORT_URL_CUSTOM_SLUG,
+                self::SHORT_URL_META,
+                self::SHORT_URL_CUSTOM_SLUG_AND_DOMAIN,
+                self::SHORT_URL_SHLINK_WITH_TITLE,
+                self::SHORT_URL_DOCS,
+            ],
+        ];
+        yield [
+            ['excludePastValidUntil' => 'true'],
+            [
+                self::SHORT_URL_CUSTOM_DOMAIN,
+                self::SHORT_URL_CUSTOM_SLUG,
+                self::SHORT_URL_META,
+                self::SHORT_URL_CUSTOM_SLUG_AND_DOMAIN,
+                self::SHORT_URL_SHLINK_WITH_TITLE,
+            ],
+        ];
+        yield [
+            ['excludeMaxVisitsReached' => 'true'],
+            [
+                self::SHORT_URL_CUSTOM_DOMAIN,
+                self::SHORT_URL_CUSTOM_SLUG,
+                self::SHORT_URL_META,
+                self::SHORT_URL_CUSTOM_SLUG_AND_DOMAIN,
+                self::SHORT_URL_DOCS,
+            ],
+        ];
+        yield [
+            ['orderBy' => 'shortCode'],
+            [
+                self::SHORT_URL_SHLINK_WITH_TITLE,
+                self::SHORT_URL_CUSTOM_SLUG,
+                self::SHORT_URL_CUSTOM_SLUG_AND_DOMAIN,
+                self::SHORT_URL_META,
+                self::SHORT_URL_DOCS,
+                self::SHORT_URL_CUSTOM_DOMAIN,
+            ],
+        ];
+        yield [
+            ['orderBy' => 'shortCode-DESC'],
+            [
+                self::SHORT_URL_DOCS,
+                self::SHORT_URL_CUSTOM_DOMAIN,
+                self::SHORT_URL_META,
+                self::SHORT_URL_CUSTOM_SLUG_AND_DOMAIN,
+                self::SHORT_URL_CUSTOM_SLUG,
+                self::SHORT_URL_SHLINK_WITH_TITLE,
+            ],
+        ];
+        yield [
+            ['orderBy' => 'title-DESC'],
+            [
+                self::SHORT_URL_SHLINK_WITH_TITLE,
+                self::SHORT_URL_META,
+                self::SHORT_URL_CUSTOM_SLUG,
+                self::SHORT_URL_DOCS,
+                self::SHORT_URL_CUSTOM_DOMAIN,
+                self::SHORT_URL_CUSTOM_SLUG_AND_DOMAIN,
+            ],
+        ];
+        yield [
+            ['startDate' => Chronos::parse('2018-12-01')->toAtomString()],
+            [
+                self::SHORT_URL_CUSTOM_DOMAIN,
+                self::SHORT_URL_CUSTOM_SLUG,
+                self::SHORT_URL_META,
+            ],
+        ];
+        yield [
+            ['endDate' => Chronos::parse('2018-12-01')->toAtomString()],
+            [
+                self::SHORT_URL_CUSTOM_SLUG_AND_DOMAIN,
+                self::SHORT_URL_SHLINK_WITH_TITLE,
+                self::SHORT_URL_DOCS,
+            ],
+        ];
+        yield [
+            ['tags' => ['foo']],
+            [
+                self::SHORT_URL_CUSTOM_DOMAIN,
+                self::SHORT_URL_META,
+                self::SHORT_URL_SHLINK_WITH_TITLE,
+            ],
+        ];
+        yield [
+            ['tags' => ['bar']],
+            [
+                self::SHORT_URL_META,
+            ],
+        ];
+        yield [
+            ['tags' => ['foo', 'bar']],
+            [
+                self::SHORT_URL_CUSTOM_DOMAIN,
+                self::SHORT_URL_META,
+                self::SHORT_URL_SHLINK_WITH_TITLE,
+            ],
+        ];
+        yield [
+            ['tags' => ['foo', 'bar'], 'tagsMode' => 'any'],
+            [
+                self::SHORT_URL_CUSTOM_DOMAIN,
+                self::SHORT_URL_META,
+                self::SHORT_URL_SHLINK_WITH_TITLE,
+            ],
+        ];
+        yield [
+            ['tags' => ['foo', 'bar'], 'tagsMode' => 'all'],
+            [
+                self::SHORT_URL_META,
+            ],
+        ];
+        yield [
+            ['tags' => ['foo', 'bar', 'baz']],
+            [
+                self::SHORT_URL_CUSTOM_DOMAIN,
+                self::SHORT_URL_META,
+                self::SHORT_URL_SHLINK_WITH_TITLE,
+            ],
+        ];
+        yield [['tags' => ['foo', 'bar', 'baz'], 'tagsMode' => 'all'], []];
+        yield [
+            ['tags' => ['foo'], 'endDate' => Chronos::parse('2018-12-01')->toAtomString()],
+            [
+                self::SHORT_URL_SHLINK_WITH_TITLE,
+            ],
+        ];
+        yield [
+            ['searchTerm' => 'alejandro'],
+            [
+                self::SHORT_URL_CUSTOM_DOMAIN,
+                self::SHORT_URL_META,
+            ],
+        ];
+        yield [
+            ['searchTerm' => 'cool'],
+            [
+                self::SHORT_URL_SHLINK_WITH_TITLE,
+            ],
+        ];
+        yield [
+            ['searchTerm' => 'example.com'],
+            [
+                self::SHORT_URL_CUSTOM_DOMAIN,
+            ],
+        ];
+        yield [
+            ['domain' => 'example.com'],
+            [
+                self::SHORT_URL_CUSTOM_DOMAIN,
+            ],
+        ];
+        yield [
+            ['domain' => Domain::DEFAULT_AUTHORITY],
+            [
+                self::SHORT_URL_CUSTOM_SLUG,
+                self::SHORT_URL_META,
+                self::SHORT_URL_SHLINK_WITH_TITLE,
+                self::SHORT_URL_DOCS,
+            ],
+        ];
+
+        // Exclude tags
+        yield [
+            ['excludeTags' => ['foo']],
+            [
+                self::SHORT_URL_CUSTOM_SLUG,
+                self::SHORT_URL_CUSTOM_SLUG_AND_DOMAIN,
+                self::SHORT_URL_DOCS,
+            ],
+        ];
+        yield [
+            ['excludeTags' => ['foo', 'bar']],
+            [
+                self::SHORT_URL_CUSTOM_SLUG,
+                self::SHORT_URL_CUSTOM_SLUG_AND_DOMAIN,
+                self::SHORT_URL_DOCS,
+            ],
+        ];
+        yield [
+            ['excludeTags' => ['bar', 'foo'], 'excludeTagsMode' => 'all'],
+            [
+                self::SHORT_URL_CUSTOM_DOMAIN,
+                self::SHORT_URL_CUSTOM_SLUG,
+                self::SHORT_URL_CUSTOM_SLUG_AND_DOMAIN,
+                self::SHORT_URL_SHLINK_WITH_TITLE,
+                self::SHORT_URL_DOCS,
+            ],
+        ];
+
+        // Filter by API key name
+        yield [
+            ['apiKeyName' => 'author_api_key'],
+            [
+                self::SHORT_URL_CUSTOM_SLUG,
+                self::SHORT_URL_META,
+                self::SHORT_URL_SHLINK_WITH_TITLE,
+            ],
+        ];
+        yield [['apiKeyName' => 'invalid'], []];
+        yield [
+            ['apiKeyName' => 'valid_api_key'],
+            [
+                // If the author_api_key is used, the `apiKeyName` param is ignored
+                self::SHORT_URL_CUSTOM_SLUG,
+                self::SHORT_URL_META,
+                self::SHORT_URL_SHLINK_WITH_TITLE,
+            ],
+            'author_api_key',
+        ];
+        yield [
+            ['apiKeyName' => 'valid_api_key'],
+            [
+                // If the domain_api_key is used, the `apiKeyName` param is ignored
+                self::SHORT_URL_CUSTOM_DOMAIN,
+            ],
+            'domain_api_key',
+        ];
+
+        // Different API keys
+        yield [
+            [],
+            [
+                self::SHORT_URL_CUSTOM_SLUG,
+                self::SHORT_URL_META,
+                self::SHORT_URL_SHLINK_WITH_TITLE,
+            ],
+            'author_api_key',
+        ];
+        yield [
+            [],
+            [
+                self::SHORT_URL_CUSTOM_DOMAIN,
+            ],
+            'domain_api_key',
+        ];
     }
 
     private function buildPagination(int $itemsCount): array
@@ -302,19 +433,22 @@ class ListShortUrlsTest extends ApiTestCase
         $respPayload = $this->getJsonResponsePayload($resp);
 
         self::assertEquals(400, $resp->getStatusCode());
-        self::assertEquals([
-            'invalidElements' => $expectedInvalidElements,
-            'title' => 'Invalid data',
-            'type' => 'https://shlink.io/api/error/invalid-data',
-            'status' => 400,
-            'detail' => 'Provided data is not valid',
-        ], $respPayload);
+        self::assertEquals(
+            [
+                'invalidElements' => $expectedInvalidElements,
+                'title' => 'Invalid data',
+                'type' => 'https://shlink.io/api/error/invalid-data',
+                'status' => 400,
+                'detail' => 'Provided data is not valid',
+            ],
+            $respPayload,
+        );
     }
 
     public static function provideInvalidFiltering(): iterable
     {
         yield [['tagsMode' => 'invalid'], ['tagsMode']];
         yield [['orderBy' => 'invalid'], ['orderBy']];
-        yield [['orderBy' => 'invalid', 'tagsMode' => 'invalid'], ['tagsMode', 'orderBy']];
+        yield [['orderBy' => 'invalid', 'tagsMode' => 'invalid'], ['orderBy', 'tagsMode']];
     }
 }

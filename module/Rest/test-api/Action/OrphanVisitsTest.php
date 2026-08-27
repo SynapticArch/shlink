@@ -13,32 +13,35 @@ use Shlinkio\Shlink\TestUtils\ApiTest\ApiTestCase;
 
 class OrphanVisitsTest extends ApiTestCase
 {
-    private const INVALID_SHORT_URL = [
+    private const array INVALID_SHORT_URL = [
         'referer' => 'https://s.test/foo',
         'date' => '2020-03-01T00:00:00+00:00',
         'userAgent' => 'cf-facebook',
         'visitLocation' => null,
         'potentialBot' => true,
-        'visitedUrl' => 'foo.com',
+        'visitedUrl' => 'https://example.com/short',
         'type' => 'invalid_short_url',
+        'redirectUrl' => null,
     ];
-    private const REGULAR_NOT_FOUND = [
+    private const array REGULAR_NOT_FOUND = [
         'referer' => 'https://s.test/foo/bar',
         'date' => '2020-02-01T00:00:00+00:00',
         'userAgent' => 'shlink-tests-agent',
         'visitLocation' => null,
         'potentialBot' => false,
-        'visitedUrl' => '',
+        'visitedUrl' => 'https://s.test/bar',
         'type' => 'regular_404',
+        'redirectUrl' => null,
     ];
-    private const BASE_URL = [
+    private const array BASE_URL = [
         'referer' => 'https://s.test',
         'date' => '2020-01-01T00:00:00+00:00',
         'userAgent' => 'shlink-tests-agent',
         'visitLocation' => null,
         'potentialBot' => false,
-        'visitedUrl' => '',
+        'visitedUrl' => 'https://s.test/foo',
         'type' => 'base_url',
+        'redirectUrl' => null,
     ];
 
     #[Test, DataProvider('provideQueries')]
@@ -76,6 +79,14 @@ class OrphanVisitsTest extends ApiTestCase
             1,
             1,
             [self::INVALID_SHORT_URL],
+        ];
+        yield 'example domain only' => [['domain' => 'example.com'], 1, 1, [self::INVALID_SHORT_URL]];
+        yield 'default domain only' => [['domain' => 's.test'], 2, 2, [self::REGULAR_NOT_FOUND, self::BASE_URL]];
+        yield 'default domain only with DEFAULT keyword' => [
+            ['domain' => 'DEFAULT'],
+            2,
+            2,
+            [self::REGULAR_NOT_FOUND, self::BASE_URL],
         ];
     }
 

@@ -18,7 +18,7 @@ use Symfony\Component\Console\Tester\CommandTester;
 class InitialApiKeyCommandTest extends TestCase
 {
     private CommandTester $commandTester;
-    private MockObject & ApiKeyServiceInterface $apiKeyService;
+    private MockObject&ApiKeyServiceInterface $apiKeyService;
 
     public function setUp(): void
     {
@@ -35,7 +35,7 @@ class InitialApiKeyCommandTest extends TestCase
         $this->apiKeyService->expects($this->once())->method('createInitial')->with('the_key')->willReturn($result);
 
         $this->commandTester->execute(
-            ['apiKey' => 'the_key'],
+            ['api-key' => 'the_key'],
             ['verbosity' => $verbose ? OutputInterface::VERBOSITY_VERBOSE : OutputInterface::VERBOSITY_NORMAL],
         );
         $output = $this->commandTester->getDisplay();
@@ -49,9 +49,8 @@ class InitialApiKeyCommandTest extends TestCase
         yield 'api key created, verbose' => [ApiKey::create(), true, ''];
         yield 'no api key created, no verbose' => [null, false, ''];
         yield 'no api key created, verbose' => [null, true, <<<OUT
-            Other API keys already exist. Initial API key creation skipped.
+                Other API keys already exist. Initial API key creation skipped.
 
-            OUT,
-        ];
+                OUT];
     }
 }

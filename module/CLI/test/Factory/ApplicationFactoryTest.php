@@ -30,8 +30,8 @@ class ApplicationFactoryTest extends TestCase
                 'baz' => 'baz',
             ],
         ]);
-        $sm->setService('foo', CliTestUtils::createCommandMock('foo'));
-        $sm->setService('bar', CliTestUtils::createCommandMock('bar'));
+        $sm->setService('foo', CliTestUtils::createCommandStub('foo'));
+        $sm->setService('bar', CliTestUtils::createCommandStub('bar'));
 
         $instance = ($this->factory)($sm);
 
@@ -42,11 +42,13 @@ class ApplicationFactoryTest extends TestCase
 
     private function createServiceManager(array $config = []): ServiceManager
     {
-        return new ServiceManager(['services' => [
-            'config' => [
-                'cli' => $config,
+        return new ServiceManager([
+            'services' => [
+                'config' => [
+                    'cli' => $config,
+                ],
+                AppOptions::class => new AppOptions(),
             ],
-            AppOptions::class => new AppOptions(),
-        ]]);
+        ]);
     }
 }

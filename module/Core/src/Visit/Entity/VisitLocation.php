@@ -22,40 +22,26 @@ class VisitLocation extends AbstractEntity implements JsonSerializable
         public readonly float $longitude,
         public readonly string $timezone,
     ) {
-        $this->isEmpty = (
-            $countryCode === '' &&
-            $countryName === '' &&
-            $regionName === '' &&
-            $cityName === '' &&
-            $latitude === 0.0 &&
-            $longitude === 0.0 &&
-            $timezone === ''
-        );
+        $this->isEmpty =
+            $countryCode === ''
+            && $countryName === ''
+            && $regionName === ''
+            && $cityName === ''
+            && $latitude === 0.0
+            && $longitude === 0.0
+            && $timezone === '';
     }
 
-    public static function fromGeolocation(Location $location): self
+    public static function fromLocation(Location|ImportedShlinkVisitLocation $location): self
     {
         return new self(
             countryCode: $location->countryCode,
             countryName: $location->countryName,
             regionName: $location->regionName,
-            cityName: $location->city,
+            cityName: $location instanceof Location ? $location->city : $location->cityName,
             latitude: $location->latitude,
             longitude: $location->longitude,
-            timezone: $location->timeZone,
-        );
-    }
-
-    public static function fromImport(ImportedShlinkVisitLocation $location): self
-    {
-        return new self(
-            countryCode: $location->countryCode,
-            countryName: $location->countryName,
-            regionName: $location->regionName,
-            cityName: $location->cityName,
-            latitude: $location->latitude,
-            longitude: $location->longitude,
-            timezone: $location->timezone,
+            timezone: $location instanceof Location ? $location->timeZone : $location->timezone,
         );
     }
 

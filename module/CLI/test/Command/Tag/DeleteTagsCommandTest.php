@@ -15,7 +15,7 @@ use Symfony\Component\Console\Tester\CommandTester;
 class DeleteTagsCommandTest extends TestCase
 {
     private CommandTester $commandTester;
-    private MockObject & TagServiceInterface $tagService;
+    private MockObject&TagServiceInterface $tagService;
 
     protected function setUp(): void
     {
@@ -26,6 +26,8 @@ class DeleteTagsCommandTest extends TestCase
     #[Test]
     public function errorIsReturnedWhenNoTagsAreProvided(): void
     {
+        $this->tagService->expects($this->never())->method('deleteTags');
+
         $this->commandTester->execute([]);
 
         $output = $this->commandTester->getDisplay();

@@ -19,9 +19,11 @@ use function array_map;
 
 readonly class DomainService implements DomainServiceInterface
 {
-    public function __construct(private EntityManagerInterface $em, private UrlShortenerOptions $urlShortenerOptions)
-    {
-    }
+    public function __construct(
+        private EntityManagerInterface $em,
+        private UrlShortenerOptions $urlShortenerOptions,
+        private DomainRepositoryInterface $repo,
+    ) {}
 
     /**
      * @return DomainItem[]
@@ -29,7 +31,7 @@ readonly class DomainService implements DomainServiceInterface
     public function listDomains(ApiKey|null $apiKey = null): array
     {
         [$default, $domains] = $this->defaultDomainAndRest($apiKey);
-        $mappedDomains = array_map(fn (Domain $domain) => DomainItem::forNonDefaultDomain($domain), $domains);
+        $mappedDomains = array_map(DomainItem::forNonDefaultDomain(...), $domains);
 
         if ($apiKey?->hasRole(Role::DOMAIN_SPECIFIC)) {
             return $mappedDomains;
@@ -49,9 +51,7 @@ readonly class DomainService implements DomainServiceInterface
      */
     private function defaultDomainAndRest(ApiKey|null $apiKey): array
     {
-        /** @var DomainRepositoryInterface $repo */
-        $repo = $this->em->getRepository(Domain::class);
-        $allDomains = $repo->findDomains($apiKey);
+        $allDomains = $this->repo->findDomains($apiKey);
         $defaultDomain = null;
         $restOfDomains = [];
 
@@ -71,7 +71,6 @@ readonly class DomainService implements DomainServiceInterface
      */
     public function getDomain(string $domainId): Domain
     {
-        /** @var Domain|null $domain */
         $domain = $this->em->find(Domain::class, $domainId);
         if ($domain === null) {
             throw DomainNotFoundException::fromId($domainId);
@@ -82,7 +81,7 @@ readonly class DomainService implements DomainServiceInterface
 
     public function findByAuthority(string $authority, ApiKey|null $apiKey = null): Domain|null
     {
-        return $this->em->getRepository(Domain::class)->findOneByAuthority($authority, $apiKey);
+        return $this->repo->findOneByAuthority($authority, $apiKey);
     }
 
     /**
@@ -123,7 +122,7 @@ readonly class DomainService implements DomainServiceInterface
             throw DomainNotFoundException::fromAuthority($authority);
         }
 
-        $domain = $domain ?? Domain::withAuthority($authority);
+        $domain ??= Domain::withAuthority($authority);
         $this->em->persist($domain);
 
         return $domain;

@@ -29,8 +29,8 @@ use function sprintf;
 class VisitLocatorTest extends TestCase
 {
     private VisitLocator $visitService;
-    private MockObject & EntityManager $em;
-    private MockObject & VisitIterationRepositoryInterface $repo;
+    private MockObject&EntityManager $em;
+    private MockObject&VisitIterationRepositoryInterface $repo;
 
     protected function setUp(): void
     {
@@ -40,36 +40,40 @@ class VisitLocatorTest extends TestCase
         $this->visitService = new VisitLocator($this->em, $this->repo);
     }
 
+    /**
+     * @param non-empty-string $expectedRepoMethodName
+     */
     #[Test, DataProvider('provideMethodNames')]
     public function locateVisitsIteratesAndLocatesExpectedVisits(
         string $serviceMethodName,
         string $expectedRepoMethodName,
     ): void {
         $unlocatedVisits = array_map(
-            fn (int $i) => Visit::forValidShortUrl(
+            static fn (int $i) => Visit::forValidShortUrl(
                 ShortUrl::withLongUrl(sprintf('https://short_code_%s', $i)),
-                Visitor::emptyInstance(),
+                Visitor::empty(),
             ),
             range(1, 200),
         );
 
         $this->repo->expects($this->once())->method($expectedRepoMethodName)->willReturn($unlocatedVisits);
 
-        $this->em->expects($this->exactly(count($unlocatedVisits)))->method('persist')->with(
-            $this->isInstanceOf(Visit::class),
-        );
+        $this->em
+            ->expects($this->exactly(count($unlocatedVisits)))
+            ->method('persist')
+            ->with(
+                $this->isInstanceOf(Visit::class),
+            );
         $this->em->expects($this->exactly((int) floor(count($unlocatedVisits) / 200) + 1))->method('flush');
         $this->em->expects($this->exactly((int) floor(count($unlocatedVisits) / 200) + 1))->method('clear');
 
         $this->visitService->{$serviceMethodName}(new class implements VisitGeolocationHelperInterface {
             public function geolocateVisit(Visit $visit): Location
             {
-                return Location::emptyInstance();
+                return Location::empty();
             }
 
-            public function onVisitLocated(VisitLocation $visitLocation, Visit $visit): void
-            {
-            }
+            public function onVisitLocated(VisitLocation $visitLocation, Visit $visit): void {}
         });
     }
 
@@ -80,6 +84,9 @@ class VisitLocatorTest extends TestCase
         yield 'locateAllVisits' => ['locateAllVisits', 'findAllVisits'];
     }
 
+    /**
+     * @param non-empty-string $expectedRepoMethodName
+     */
     #[Test, DataProvider('provideIsNonLocatableAddress')]
     public function visitsWhichCannotBeLocatedAreIgnoredOrLocatedAsEmpty(
         string $serviceMethodName,
@@ -87,22 +94,23 @@ class VisitLocatorTest extends TestCase
         bool $isNonLocatableAddress,
     ): void {
         $unlocatedVisits = [
-            Visit::forValidShortUrl(ShortUrl::withLongUrl('https://foo'), Visitor::emptyInstance()),
+            Visit::forValidShortUrl(ShortUrl::withLongUrl('https://foo'), Visitor::empty()),
         ];
 
         $this->repo->expects($this->once())->method($expectedRepoMethodName)->willReturn($unlocatedVisits);
 
-        $this->em->expects($this->exactly($isNonLocatableAddress ? 1 : 0))->method('persist')->with(
-            $this->isInstanceOf(Visit::class),
-        );
+        $this->em
+            ->expects($this->exactly($isNonLocatableAddress ? 1 : 0))
+            ->method('persist')
+            ->with(
+                $this->isInstanceOf(Visit::class),
+            );
         $this->em->expects($this->once())->method('flush');
         $this->em->expects($this->once())->method('clear');
 
         $this->visitService->{$serviceMethodName}(
-            new class ($isNonLocatableAddress) implements VisitGeolocationHelperInterface {
-                public function __construct(private readonly bool $isNonLocatableAddress)
-                {
-                }
+            new class($isNonLocatableAddress) implements VisitGeolocationHelperInterface {
+                public function __construct(private readonly bool $isNonLocatableAddress) {}
 
                 public function geolocateVisit(Visit $visit): Location
                 {
@@ -111,9 +119,7 @@ class VisitLocatorTest extends TestCase
                         : IpCannotBeLocatedException::forError(new Exception(''));
                 }
 
-                public function onVisitLocated(VisitLocation $visitLocation, Visit $visit): void
-                {
-                }
+                public function onVisitLocated(VisitLocation $visitLocation, Visit $visit): void {}
             },
         );
     }

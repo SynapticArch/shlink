@@ -7,7 +7,6 @@ namespace Shlinkio\Shlink\Rest\Entity;
 use Cake\Chronos\Chronos;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
-use Exception;
 use Happyr\DoctrineSpecification\Spec;
 use Happyr\DoctrineSpecification\Specification\Specification;
 use Shlinkio\Shlink\Common\Entity\AbstractEntity;
@@ -15,40 +14,43 @@ use Shlinkio\Shlink\Rest\ApiKey\Model\ApiKeyMeta;
 use Shlinkio\Shlink\Rest\ApiKey\Model\RoleDefinition;
 use Shlinkio\Shlink\Rest\ApiKey\Role;
 
+use function hash;
+
 class ApiKey extends AbstractEntity
 {
     /**
      * @param Collection<string, ApiKeyRole> $roles
-     * @throws Exception
      */
     private function __construct(
-        private string $key,
-        public readonly string|null $name = null,
+        public readonly string $key,
+        // TODO Use a property hook to allow public read but private write
+        public string $name,
         public readonly Chronos|null $expirationDate = null,
         private bool $enabled = true,
         private Collection $roles = new ArrayCollection(),
-    ) {
-    }
+    ) {}
 
-    /**
-     * @throws Exception
-     */
     public static function create(): ApiKey
     {
-        return self::fromMeta(ApiKeyMeta::empty());
+        return self::fromMeta(ApiKeyMeta::create());
     }
 
-    /**
-     * @throws Exception
-     */
     public static function fromMeta(ApiKeyMeta $meta): self
     {
-        $apiKey = new self($meta->key, $meta->name, $meta->expirationDate);
+        $apiKey = new self(self::hashKey($meta->key), $meta->name, $meta->expirationDate);
         foreach ($meta->roleDefinitions as $roleDefinition) {
             $apiKey->registerRole($roleDefinition);
         }
 
         return $apiKey;
+    }
+
+    /**
+     * Generates a hash for provided key, in the way Shlink expects API keys to be hashed
+     */
+    public static function hashKey(string $key): string
+    {
+        return hash('sha256', $key);
     }
 
     public function isExpired(): bool
@@ -72,28 +74,18 @@ class ApiKey extends AbstractEntity
      */
     public function isValid(): bool
     {
-        return $this->isEnabled() && ! $this->isExpired();
-    }
-
-    public function __toString(): string
-    {
-        return $this->key;
-    }
-
-    public function toString(): string
-    {
-        return $this->key;
+        return $this->isEnabled() && !$this->isExpired();
     }
 
     public function spec(string|null $context = null): Specification
     {
-        $specs = $this->roles->map(fn (ApiKeyRole $role) => Role::toSpec($role, $context))->getValues();
+        $specs = $this->roles->map(static fn (ApiKeyRole $role) => Role::toSpec($role, $context))->getValues();
         return Spec::andX(...$specs);
     }
 
     public function inlinedSpec(): Specification
     {
-        $specs = $this->roles->map(fn (ApiKeyRole $role) => Role::toInlinedSpec($role))->getValues();
+        $specs = $this->roles->map(Role::toInlinedSpec(...))->getValues();
         return Spec::andX(...$specs);
     }
 
@@ -139,7 +131,7 @@ class ApiKey extends AbstractEntity
      */
     public function mapRoles(callable $fun): array
     {
-        return $this->roles->map(fn (ApiKeyRole $role) => $fun($role->role, $role->meta()))->getValues();
+        return $this->roles->map(static fn (ApiKeyRole $role) => $fun($role->role, $role->meta()))->getValues();
     }
 
     public function registerRole(RoleDefinition $roleDefinition): void

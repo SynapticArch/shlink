@@ -13,9 +13,9 @@ use PHPUnit\Framework\TestCase;
 use Shlinkio\Shlink\Core\Exception\ForbiddenTagOperationException;
 use Shlinkio\Shlink\Core\Exception\TagConflictException;
 use Shlinkio\Shlink\Core\Exception\TagNotFoundException;
+use Shlinkio\Shlink\Core\Model\Renaming;
 use Shlinkio\Shlink\Core\Tag\Entity\Tag;
 use Shlinkio\Shlink\Core\Tag\Model\TagInfo;
-use Shlinkio\Shlink\Core\Tag\Model\TagRenaming;
 use Shlinkio\Shlink\Core\Tag\Model\TagsListFiltering;
 use Shlinkio\Shlink\Core\Tag\Model\TagsParams;
 use Shlinkio\Shlink\Core\Tag\Repository\TagRepository;
@@ -28,16 +28,12 @@ use ShlinkioTest\Shlink\Core\Util\ApiKeyDataProviders;
 class TagServiceTest extends TestCase
 {
     private TagService $service;
-    private MockObject & EntityManagerInterface $em;
-    private MockObject & TagRepository $repo;
+    private MockObject&TagRepository $repo;
 
     protected function setUp(): void
     {
-        $this->em = $this->createMock(EntityManagerInterface::class);
         $this->repo = $this->createMock(TagRepository::class);
-        $this->em->method('getRepository')->with(Tag::class)->willReturn($this->repo);
-
-        $this->service = new TagService($this->em);
+        $this->service = new TagService($this->createStub(EntityManagerInterface::class), $this->repo);
     }
 
     #[Test]
@@ -62,9 +58,13 @@ class TagServiceTest extends TestCase
     ): void {
         $expected = [new TagInfo('foo', 1, 1), new TagInfo('bar', 3, 10)];
 
-        $this->repo->expects($this->once())->method('findTagsWithInfo')->with($expectedFiltering)->willReturn(
-            $expected,
-        );
+        $this->repo
+            ->expects($this->once())
+            ->method('findTagsWithInfo')
+            ->with($expectedFiltering)
+            ->willReturn(
+                $expected,
+            );
         $this->repo->expects($this->exactly($countCalls))->method('matchSingleScalarResult')->willReturn(2);
 
         $result = $this->service->tagsInfo($params, $apiKey);
@@ -127,7 +127,7 @@ class TagServiceTest extends TestCase
         $this->repo->expects($this->once())->method('findOneBy')->willReturn(null);
         $this->expectException(TagNotFoundException::class);
 
-        $this->service->renameTag(TagRenaming::fromNames('foo', 'bar'), $apiKey);
+        $this->service->renameTag(Renaming::fromNames('foo', 'bar'), $apiKey);
     }
 
     #[Test, DataProvider('provideValidRenames')]
@@ -136,10 +136,12 @@ class TagServiceTest extends TestCase
         $expected = new Tag('foo');
 
         $this->repo->expects($this->once())->method('findOneBy')->willReturn($expected);
-        $this->repo->expects($this->exactly($count > 0 ? 0 : 1))->method('count')->willReturn($count);
-        $this->em->expects($this->once())->method('flush');
+        $this->repo
+            ->expects($this->exactly($count > 0 ? 0 : 1))
+            ->method('count')
+            ->willReturn($count);
 
-        $tag = $this->service->renameTag(TagRenaming::fromNames($oldName, $newName));
+        $tag = $this->service->renameTag(Renaming::fromNames($oldName, $newName));
 
         self::assertSame($expected, $tag);
         self::assertEquals($newName, (string) $tag);
@@ -156,23 +158,22 @@ class TagServiceTest extends TestCase
     {
         $this->repo->expects($this->once())->method('findOneBy')->willReturn(new Tag('foo'));
         $this->repo->expects($this->once())->method('count')->willReturn(1);
-        $this->em->expects($this->never())->method('flush');
 
         $this->expectException(TagConflictException::class);
 
-        $this->service->renameTag(TagRenaming::fromNames('foo', 'bar'), $apiKey);
+        $this->service->renameTag(Renaming::fromNames('foo', 'bar'), $apiKey);
     }
 
     #[Test]
     public function renamingTagThrowsExceptionWhenProvidedApiKeyIsNotAdmin(): void
     {
-        $this->em->expects($this->never())->method('getRepository')->with(Tag::class);
+        $this->repo->expects($this->never())->method('findOneBy');
 
         $this->expectExceptionMessage(ForbiddenTagOperationException::class);
         $this->expectExceptionMessage('You are not allowed to rename tags');
 
         $this->service->renameTag(
-            TagRenaming::fromNames('foo', 'bar'),
+            Renaming::fromNames('foo', 'bar'),
             ApiKey::fromMeta(ApiKeyMeta::withRoles(RoleDefinition::forAuthoredShortUrls())),
         );
     }

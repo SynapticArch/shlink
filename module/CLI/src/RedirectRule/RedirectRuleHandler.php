@@ -5,13 +5,15 @@ declare(strict_types=1);
 namespace Shlinkio\Shlink\CLI\RedirectRule;
 
 use Doctrine\Common\Collections\ArrayCollection;
+use Shlinkio\Shlink\Common\ObjectMapper\LooseUriConverter;
+use Shlinkio\Shlink\Common\ObjectMapper\MappingError;
 use Shlinkio\Shlink\Core\Exception\InvalidArgumentException;
+use Shlinkio\Shlink\Core\Model\Browser;
 use Shlinkio\Shlink\Core\Model\DeviceType;
 use Shlinkio\Shlink\Core\RedirectRule\Entity\RedirectCondition;
 use Shlinkio\Shlink\Core\RedirectRule\Entity\ShortUrlRedirectRule;
 use Shlinkio\Shlink\Core\RedirectRule\Model\RedirectConditionType;
 use Shlinkio\Shlink\Core\ShortUrl\Entity\ShortUrl;
-use Shlinkio\Shlink\Core\ShortUrl\Model\Validation\ShortUrlInputFilter;
 use Symfony\Component\Console\Style\StyleInterface;
 
 use function array_flip;
@@ -22,6 +24,7 @@ use function implode;
 use function is_numeric;
 use function max;
 use function min;
+use function Shlinkio\Shlink\Common\normalizeDate;
 use function Shlinkio\Shlink\Core\ArrayUtils\map;
 use function Shlinkio\Shlink\Core\enumValues;
 use function sprintf;
@@ -43,8 +46,8 @@ class RedirectRuleHandler implements RedirectRuleHandlerInterface
         } else {
             $listing = map(
                 $rules,
-                function (ShortUrlRedirectRule $rule, string|int|float $index) use ($amountOfRules): array {
-                    $priority = ((int) $index) + 1;
+                static function (ShortUrlRedirectRule $rule, string|int|float $index) use ($amountOfRules): array {
+                    $priority = (int) $index + 1;
                     $conditions = $rule->mapConditions(static fn (RedirectCondition $condition): string => sprintf(
                         '<comment>%s</comment>',
                         $condition->toHumanFriendly(),
@@ -108,8 +111,29 @@ class RedirectRuleHandler implements RedirectRuleHandlerInterface
                     $this->askMandatory('Query param name?', $io),
                     $this->askOptional('Query param value?', $io),
                 ),
+                RedirectConditionType::ANY_VALUE_QUERY_PARAM => RedirectCondition::forAnyValueQueryParam(
+                    $this->askMandatory('Query param name?', $io),
+                ),
+                RedirectConditionType::VALUELESS_QUERY_PARAM => RedirectCondition::forValuelessQueryParam(
+                    $this->askMandatory('Query param name?', $io),
+                ),
                 RedirectConditionType::IP_ADDRESS => RedirectCondition::forIpAddress(
                     $this->askMandatory('IP address, CIDR block or wildcard-pattern (1.2.*.*)', $io),
+                ),
+                RedirectConditionType::GEOLOCATION_COUNTRY_CODE => RedirectCondition::forGeolocationCountryCode(
+                    $this->askMandatory('Country code to match?', $io),
+                ),
+                RedirectConditionType::GEOLOCATION_CITY_NAME => RedirectCondition::forGeolocationCityName(
+                    $this->askMandatory('City name to match?', $io),
+                ),
+                RedirectConditionType::BEFORE_DATE => RedirectCondition::forBeforeDate(
+                    normalizeDate($this->askMandatory('Date to match?', $io)),
+                ),
+                RedirectConditionType::AFTER_DATE => RedirectCondition::forAfterDate(
+                    normalizeDate($this->askMandatory('Date to match?', $io)),
+                ),
+                RedirectConditionType::BROWSER => RedirectCondition::forBrowser(
+                    Browser::from($io->choice('Browser to match?', enumValues(Browser::class))),
                 ),
             };
 
@@ -185,8 +209,8 @@ class RedirectRuleHandler implements RedirectRuleHandlerInterface
         return $io->ask(
             'Rule priority (the lower the value, the higher the priority)',
             (string) $max,
-            function (string $answer) use ($max): int {
-                if (! is_numeric($answer)) {
+            static function (string $answer) use ($max): int {
+                if (!is_numeric($answer)) {
                     throw new InvalidArgumentException('The priority must be a numeric positive value');
                 }
 
@@ -200,20 +224,23 @@ class RedirectRuleHandler implements RedirectRuleHandlerInterface
     {
         return $io->ask(
             'Long URL to redirect when the rule matches',
-            validator: function (string $answer): string {
-                $validator = ShortUrlInputFilter::longUrlValidators();
-                if (! $validator->isValid($answer)) {
-                    throw new InvalidArgumentException(implode(', ', $validator->getMessages()));
+            validator: static function (string|null $answer): string {
+                if ($answer === null) {
+                    throw new InvalidArgumentException('The long URL is mandatory');
                 }
 
-                return $answer;
+                try {
+                    return new LooseUriConverter()->map($answer);
+                } catch (MappingError $e) {
+                    throw new InvalidArgumentException($e->body());
+                }
             },
         );
     }
 
     private function askMandatory(string $message, StyleInterface $io): string
     {
-        return $io->ask($message, validator: function (string|null $answer): string {
+        return $io->ask($message, validator: static function (string|null $answer): string {
             if ($answer === null) {
                 throw new InvalidArgumentException('The value is mandatory');
             }
@@ -223,6 +250,6 @@ class RedirectRuleHandler implements RedirectRuleHandlerInterface
 
     private function askOptional(string $message, StyleInterface $io): string
     {
-        return $io->ask($message, validator: fn (string|null $answer) => $answer === null ? '' : trim($answer));
+        return $io->ask($message, validator: static fn (string|null $answer) => $answer === null ? '' : trim($answer));
     }
 }

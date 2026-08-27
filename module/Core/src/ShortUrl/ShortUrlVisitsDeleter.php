@@ -10,13 +10,12 @@ use Shlinkio\Shlink\Core\ShortUrl\Model\ShortUrlIdentifier;
 use Shlinkio\Shlink\Core\Visit\Repository\VisitDeleterRepositoryInterface;
 use Shlinkio\Shlink\Rest\Entity\ApiKey;
 
-class ShortUrlVisitsDeleter implements ShortUrlVisitsDeleterInterface
+readonly class ShortUrlVisitsDeleter implements ShortUrlVisitsDeleterInterface
 {
     public function __construct(
-        private readonly VisitDeleterRepositoryInterface $repository,
-        private readonly ShortUrlResolverInterface $resolver,
-    ) {
-    }
+        private VisitDeleterRepositoryInterface $repository,
+        private ShortUrlResolverInterface $resolver,
+    ) {}
 
     /**
      * @throws ShortUrlNotFoundException

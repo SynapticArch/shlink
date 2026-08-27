@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace ShlinkioTest\Shlink\Core\RedirectRule;
 
 use Doctrine\Common\Collections\ArrayCollection;
@@ -9,23 +11,22 @@ use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 use Psr\Http\Message\ServerRequestInterface;
-use Shlinkio\Shlink\Common\Middleware\IpAddressMiddlewareFactory;
 use Shlinkio\Shlink\Core\Model\DeviceType;
 use Shlinkio\Shlink\Core\RedirectRule\Entity\RedirectCondition;
 use Shlinkio\Shlink\Core\RedirectRule\Entity\ShortUrlRedirectRule;
 use Shlinkio\Shlink\Core\RedirectRule\ShortUrlRedirectionResolver;
 use Shlinkio\Shlink\Core\RedirectRule\ShortUrlRedirectRuleServiceInterface;
 use Shlinkio\Shlink\Core\ShortUrl\Entity\ShortUrl;
-use Shlinkio\Shlink\Core\ShortUrl\Model\ShortUrlCreation;
 
+use const Shlinkio\Shlink\IP_ADDRESS_REQUEST_ATTRIBUTE;
 use const ShlinkioTest\Shlink\ANDROID_USER_AGENT;
-use const ShlinkioTest\Shlink\DESKTOP_USER_AGENT;
 use const ShlinkioTest\Shlink\IOS_USER_AGENT;
+use const ShlinkioTest\Shlink\WINDOWS_USER_AGENT;
 
 class ShortUrlRedirectionResolverTest extends TestCase
 {
     private ShortUrlRedirectionResolver $resolver;
-    private ShortUrlRedirectRuleServiceInterface & MockObject $ruleService;
+    private ShortUrlRedirectRuleServiceInterface&MockObject $ruleService;
 
     protected function setUp(): void
     {
@@ -39,17 +40,25 @@ class ShortUrlRedirectionResolverTest extends TestCase
         RedirectCondition|null $condition,
         string $expectedUrl,
     ): void {
-        $shortUrl = ShortUrl::create(ShortUrlCreation::fromRawData([
-            'longUrl' => 'https://example.com/foo/bar',
-        ]));
+        $shortUrl = ShortUrl::withLongUrl('https://example.com/foo/bar');
 
-        $this->ruleService->expects($this->once())->method('rulesForShortUrl')->with($shortUrl)->willReturn(
-            $condition !== null ? [
-                new ShortUrlRedirectRule($shortUrl, 1, 'https://example.com/from-rule', new ArrayCollection([
-                    $condition,
-                ])),
-            ] : [],
-        );
+        $this->ruleService
+            ->expects($this->once())
+            ->method('rulesForShortUrl')
+            ->with($shortUrl)
+            ->willReturn(
+                $condition !== null
+                    ? [
+                        new ShortUrlRedirectRule(
+                            $shortUrl,
+                            1,
+                            'https://example.com/from-rule',
+                            new ArrayCollection([
+                                $condition,
+                            ]),
+                        ),
+                    ] : [],
+            );
 
         $result = $this->resolver->resolveLongUrl($shortUrl, $request);
 
@@ -68,7 +77,7 @@ class ShortUrlRedirectionResolverTest extends TestCase
             RedirectCondition::forLanguage('es-ES'), // This condition won't match
             'https://example.com/foo/bar',
         ];
-        yield 'desktop user agent' => [$request(DESKTOP_USER_AGENT), null, 'https://example.com/foo/bar'];
+        yield 'desktop user agent' => [$request(WINDOWS_USER_AGENT), null, 'https://example.com/foo/bar'];
         yield 'matching android device' => [
             $request(ANDROID_USER_AGENT),
             RedirectCondition::forDevice(DeviceType::ANDROID),
@@ -90,22 +99,22 @@ class ShortUrlRedirectionResolverTest extends TestCase
             'https://example.com/from-rule',
         ];
         yield 'matching static IP address' => [
-            $request()->withAttribute(IpAddressMiddlewareFactory::REQUEST_ATTR, '1.2.3.4'),
+            $request()->withAttribute(IP_ADDRESS_REQUEST_ATTRIBUTE, '1.2.3.4'),
             RedirectCondition::forIpAddress('1.2.3.4'),
             'https://example.com/from-rule',
         ];
         yield 'matching CIDR block' => [
-            $request()->withAttribute(IpAddressMiddlewareFactory::REQUEST_ATTR, '192.168.1.35'),
+            $request()->withAttribute(IP_ADDRESS_REQUEST_ATTRIBUTE, '192.168.1.35'),
             RedirectCondition::forIpAddress('192.168.1.0/24'),
             'https://example.com/from-rule',
         ];
         yield 'matching wildcard IP address' => [
-            $request()->withAttribute(IpAddressMiddlewareFactory::REQUEST_ATTR, '1.2.5.5'),
+            $request()->withAttribute(IP_ADDRESS_REQUEST_ATTRIBUTE, '1.2.5.5'),
             RedirectCondition::forIpAddress('1.2.*.*'),
             'https://example.com/from-rule',
         ];
         yield 'non-matching IP address' => [
-            $request()->withAttribute(IpAddressMiddlewareFactory::REQUEST_ATTR, '4.3.2.1'),
+            $request()->withAttribute(IP_ADDRESS_REQUEST_ATTRIBUTE, '4.3.2.1'),
             RedirectCondition::forIpAddress('1.2.3.4'),
             'https://example.com/foo/bar',
         ];

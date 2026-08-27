@@ -4,39 +4,38 @@ declare(strict_types=1);
 
 namespace Shlinkio\Shlink\CLI\Command\Visit;
 
-use Shlinkio\Shlink\CLI\Util\ExitCode;
+use Shlinkio\Shlink\CLI\Command\Util\CommandUtils;
 use Shlinkio\Shlink\Core\Visit\VisitsDeleterInterface;
-use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Attribute\AsCommand;
+use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
 use function sprintf;
 
-class DeleteOrphanVisitsCommand extends AbstractDeleteVisitsCommand
+#[AsCommand(DeleteOrphanVisitsCommand::NAME, 'Deletes all orphan visits')]
+class DeleteOrphanVisitsCommand extends Command
 {
-    public const NAME = 'visit:orphan-delete';
+    public const string NAME = 'visit:orphan-delete';
 
     public function __construct(private readonly VisitsDeleterInterface $deleter)
     {
         parent::__construct();
     }
 
-    protected function configure(): void
+    public function __invoke(SymfonyStyle $io): int
     {
-        $this
-            ->setName(self::NAME)
-            ->setDescription('Deletes all orphan visits');
+        return CommandUtils::executeWithWarning(
+            'You are about to delete all orphan visits. This operation cannot be undone',
+            $io,
+            fn () => $this->deleteVisits($io),
+        );
     }
 
-    protected function doExecute(InputInterface $input, SymfonyStyle $io): int
+    private function deleteVisits(SymfonyStyle $io): int
     {
         $result = $this->deleter->deleteOrphanVisits();
         $io->success(sprintf('Successfully deleted %s visits', $result->affectedItems));
 
-        return ExitCode::EXIT_SUCCESS;
-    }
-
-    protected function getWarningMessage(): string
-    {
-        return 'You are about to delete all orphan visits. This operation cannot be undone.';
+        return self::SUCCESS;
     }
 }

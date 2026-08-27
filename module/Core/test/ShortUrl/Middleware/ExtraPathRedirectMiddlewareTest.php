@@ -11,11 +11,14 @@ use Mezzio\Router\Route;
 use Mezzio\Router\RouteResult;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
+use PHPUnit\Framework\Attributes\TestWith;
 use PHPUnit\Framework\MockObject\MockObject;
+use PHPUnit\Framework\MockObject\Stub;
 use PHPUnit\Framework\TestCase;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\RequestHandlerInterface;
 use Shlinkio\Shlink\Core\Action\RedirectAction;
+use Shlinkio\Shlink\Core\Config\Options\ExtraPathMode;
 use Shlinkio\Shlink\Core\Config\Options\UrlShortenerOptions;
 use Shlinkio\Shlink\Core\ErrorHandler\Model\NotFoundType;
 use Shlinkio\Shlink\Core\Exception\ShortUrlNotFoundException;
@@ -30,13 +33,15 @@ use Shlinkio\Shlink\Core\Visit\RequestTrackerInterface;
 use function Laminas\Stratigility\middleware;
 use function str_starts_with;
 
+use const Shlinkio\Shlink\REDIRECT_URL_REQUEST_ATTRIBUTE;
+
 class ExtraPathRedirectMiddlewareTest extends TestCase
 {
-    private MockObject & ShortUrlResolverInterface $resolver;
-    private MockObject & RequestTrackerInterface $requestTracker;
-    private MockObject & ShortUrlRedirectionBuilderInterface $redirectionBuilder;
-    private MockObject & RedirectResponseHelperInterface $redirectResponseHelper;
-    private MockObject & RequestHandlerInterface $handler;
+    private MockObject&ShortUrlResolverInterface $resolver;
+    private MockObject&RequestTrackerInterface $requestTracker;
+    private MockObject&ShortUrlRedirectionBuilderInterface $redirectionBuilder;
+    private MockObject&RedirectResponseHelperInterface $redirectResponseHelper;
+    private Stub&RequestHandlerInterface $handler;
 
     protected function setUp(): void
     {
@@ -44,7 +49,7 @@ class ExtraPathRedirectMiddlewareTest extends TestCase
         $this->requestTracker = $this->createMock(RequestTrackerInterface::class);
         $this->redirectionBuilder = $this->createMock(ShortUrlRedirectionBuilderInterface::class);
         $this->redirectResponseHelper = $this->createMock(RedirectResponseHelperInterface::class);
-        $this->handler = $this->createMock(RequestHandlerInterface::class);
+        $this->handler = $this->createStub(RequestHandlerInterface::class);
         $this->handler->method('handle')->willReturn(new RedirectResponse(''));
     }
 
@@ -55,14 +60,13 @@ class ExtraPathRedirectMiddlewareTest extends TestCase
         ServerRequestInterface $request,
     ): void {
         $options = new UrlShortenerOptions(
-            appendExtraPath: $appendExtraPath,
             multiSegmentSlugsEnabled: $multiSegmentEnabled,
+            extraPathMode: $appendExtraPath ? ExtraPathMode::APPEND : ExtraPathMode::DEFAULT,
         );
         $this->resolver->expects($this->never())->method('resolveEnabledShortUrl');
         $this->requestTracker->expects($this->never())->method('trackIfApplicable');
         $this->redirectionBuilder->expects($this->never())->method('buildShortUrlRedirect');
         $this->redirectResponseHelper->expects($this->never())->method('buildRedirectResponse');
-        $this->handler->expects($this->once())->method('handle');
 
         $this->middleware($options)->process($request, $this->handler);
     }
@@ -70,8 +74,10 @@ class ExtraPathRedirectMiddlewareTest extends TestCase
     public static function provideNonRedirectingRequests(): iterable
     {
         $baseReq = ServerRequestFactory::fromGlobals();
-        $buildReq = static fn (NotFoundType|null $type): ServerRequestInterface =>
-            $baseReq->withAttribute(NotFoundType::class, $type);
+        $buildReq = static fn (NotFoundType|null $type): ServerRequestInterface => $baseReq->withAttribute(
+            NotFoundType::class,
+            $type,
+        );
 
         yield 'disabled option' => [false, false, $buildReq(NotFoundType::fromRequest($baseReq, '/foo/bar'))];
         yield 'no error type' => [true, false, $buildReq(null)];
@@ -83,8 +89,7 @@ class ExtraPathRedirectMiddlewareTest extends TestCase
                 RouteResult::class,
                 RouteResult::fromRoute(new Route(
                     '/foo',
-                    middleware(function (): void {
-                    }),
+                    middleware(static function (): void {}),
                     ['GET'],
                     RedirectAction::class,
                 )),
@@ -100,22 +105,34 @@ class ExtraPathRedirectMiddlewareTest extends TestCase
         ];
     }
 
-    #[Test, DataProvider('provideResolves')]
+    #[Test]
+    #[TestWith(['multiSegmentEnabled' => false, 'expectedResolveCalls' => 1])]
+    #[TestWith(['multiSegmentEnabled' => true, 'expectedResolveCalls' => 3])]
     public function handlerIsCalledWhenNoShortUrlIsFoundAfterExpectedAmountOfIterations(
         bool $multiSegmentEnabled,
         int $expectedResolveCalls,
     ): void {
-        $options = new UrlShortenerOptions(appendExtraPath: true, multiSegmentSlugsEnabled: $multiSegmentEnabled);
+        $options = new UrlShortenerOptions(
+            multiSegmentSlugsEnabled: $multiSegmentEnabled,
+            extraPathMode: ExtraPathMode::APPEND,
+        );
 
-        $type = $this->createMock(NotFoundType::class);
+        $type = $this->createStub(NotFoundType::class);
         $type->method('isRegularNotFound')->willReturn(true);
         $type->method('isInvalidShortUrl')->willReturn(true);
-        $request = ServerRequestFactory::fromGlobals()->withAttribute(NotFoundType::class, $type)
-                                                      ->withUri(new Uri('/shortCode/bar/baz'));
+        $request = ServerRequestFactory::fromGlobals()
+            ->withAttribute(NotFoundType::class, $type)
+            ->withUri(new Uri('/shortCode/bar/baz'));
 
-        $this->resolver->expects($this->exactly($expectedResolveCalls))->method('resolveEnabledShortUrl')->with(
-            $this->callback(fn (ShortUrlIdentifier $id) => str_starts_with($id->shortCode, 'shortCode')),
-        )->willThrowException(ShortUrlNotFoundException::fromNotFound(ShortUrlIdentifier::fromShortCodeAndDomain('')));
+        $this->resolver
+            ->expects($this->exactly($expectedResolveCalls))
+            ->method('resolveEnabledShortUrl')
+            ->with(
+                $this->callback(static fn (ShortUrlIdentifier $id) => str_starts_with($id->shortCode, 'shortCode')),
+            )
+            ->willThrowException(ShortUrlNotFoundException::fromNotFound(ShortUrlIdentifier::fromShortCodeAndDomain(
+                '',
+            )));
         $this->requestTracker->expects($this->never())->method('trackIfApplicable');
         $this->redirectionBuilder->expects($this->never())->method('buildShortUrlRedirect');
         $this->redirectResponseHelper->expects($this->never())->method('buildRedirectResponse');
@@ -125,49 +142,74 @@ class ExtraPathRedirectMiddlewareTest extends TestCase
 
     #[Test, DataProvider('provideResolves')]
     public function visitIsTrackedAndRedirectIsReturnedWhenShortUrlIsFoundAfterExpectedAmountOfIterations(
+        ExtraPathMode $extraPathMode,
         bool $multiSegmentEnabled,
         int $expectedResolveCalls,
         string|null $expectedExtraPath,
     ): void {
-        $options = new UrlShortenerOptions(appendExtraPath: true, multiSegmentSlugsEnabled: $multiSegmentEnabled);
+        $options = new UrlShortenerOptions(
+            multiSegmentSlugsEnabled: $multiSegmentEnabled,
+            extraPathMode: $extraPathMode,
+        );
 
-        $type = $this->createMock(NotFoundType::class);
+        $type = $this->createStub(NotFoundType::class);
         $type->method('isRegularNotFound')->willReturn(true);
         $type->method('isInvalidShortUrl')->willReturn(true);
-        $request = ServerRequestFactory::fromGlobals()->withAttribute(NotFoundType::class, $type)
-                                                      ->withUri(new Uri('https://s.test/shortCode/bar/baz'));
+        $request = ServerRequestFactory::fromGlobals()
+            ->withAttribute(NotFoundType::class, $type)
+            ->withUri(new Uri('https://s.test/shortCode/bar/baz'));
         $shortUrl = ShortUrl::withLongUrl('https://longUrl');
 
         $currentIteration = 1;
-        $this->resolver->expects($this->exactly($expectedResolveCalls))->method('resolveEnabledShortUrl')->with(
-            $this->callback(fn (ShortUrlIdentifier $id) => str_starts_with($id->shortCode, 'shortCode')),
-        )->willReturnCallback(
-            function () use ($shortUrl, &$currentIteration, $expectedResolveCalls): ShortUrl {
-                if ($expectedResolveCalls === $currentIteration) {
-                    return $shortUrl;
-                }
+        $this->resolver
+            ->expects($this->exactly($expectedResolveCalls))
+            ->method('resolveEnabledShortUrl')
+            ->with(
+                $this->callback(static fn (ShortUrlIdentifier $id) => str_starts_with($id->shortCode, 'shortCode')),
+            )
+            ->willReturnCallback(
+                static function () use ($shortUrl, &$currentIteration, $expectedResolveCalls): ShortUrl {
+                    if ($expectedResolveCalls === $currentIteration) {
+                        return $shortUrl;
+                    }
 
-                $currentIteration++;
-                throw ShortUrlNotFoundException::fromNotFound(ShortUrlIdentifier::fromShortUrl($shortUrl));
-            },
-        );
-        $this->redirectionBuilder->expects($this->once())->method('buildShortUrlRedirect')->with(
-            $shortUrl,
-            $this->isInstanceOf(ServerRequestInterface::class),
-            $expectedExtraPath,
-        )->willReturn('the_built_long_url');
-        $this->redirectResponseHelper->expects($this->once())->method('buildRedirectResponse')->with(
-            'the_built_long_url',
-        )->willReturn(new RedirectResponse(''));
-        $this->requestTracker->expects($this->once())->method('trackIfApplicable')->with($shortUrl, $request);
+                    $currentIteration++;
+                    throw ShortUrlNotFoundException::fromNotFound(ShortUrlIdentifier::fromShortUrl($shortUrl));
+                },
+            );
+        $this->redirectionBuilder
+            ->expects($this->once())
+            ->method('buildShortUrlRedirect')
+            ->with(
+                $shortUrl,
+                $this->isInstanceOf(ServerRequestInterface::class),
+                $expectedExtraPath,
+            )
+            ->willReturn('the_built_long_url');
+        $this->redirectResponseHelper
+            ->expects($this->once())
+            ->method('buildRedirectResponse')
+            ->with(
+                'the_built_long_url',
+            )
+            ->willReturn(new RedirectResponse(''));
+        $this->requestTracker
+            ->expects($this->once())
+            ->method('trackIfApplicable')
+            ->with(
+                $shortUrl,
+                $request->withAttribute(REDIRECT_URL_REQUEST_ATTRIBUTE, 'the_built_long_url'),
+            );
 
         $this->middleware($options)->process($request, $this->handler);
     }
 
     public static function provideResolves(): iterable
     {
-        yield [false, 1, '/bar/baz'];
-        yield [true, 3, null];
+        yield [ExtraPathMode::APPEND, false, 1, '/bar/baz'];
+        yield [ExtraPathMode::APPEND, true, 3, null];
+        yield [ExtraPathMode::IGNORE, false, 1, null];
+        yield [ExtraPathMode::IGNORE, true, 3, null];
     }
 
     private function middleware(UrlShortenerOptions|null $options = null): ExtraPathRedirectMiddleware
@@ -177,7 +219,7 @@ class ExtraPathRedirectMiddlewareTest extends TestCase
             $this->requestTracker,
             $this->redirectionBuilder,
             $this->redirectResponseHelper,
-            $options ?? new UrlShortenerOptions(appendExtraPath: true),
+            $options ?? new UrlShortenerOptions(extraPathMode: ExtraPathMode::APPEND),
         );
     }
 }

@@ -23,32 +23,36 @@ use function Shlinkio\Shlink\Config\runningInRoadRunner;
 
 return (static function (): array {
     $isDev = EnvVars::isDevEnv();
-    $common = [
+    $format = EnvVars::LOGS_FORMAT->loadFromEnv();
+    $buildCommonConfig = static fn (bool $addNewLine = false) => [
         'level' => $isDev ? Level::Debug->value : Level::Info->value,
         'processors' => [RequestIdMiddleware::class],
-        'line_format' =>
-            '[%datetime%] [%extra.' . RequestIdMiddleware::ATTRIBUTE . '%] %channel%.%level_name% - %message%',
+        'formatter' => [
+            'type' => $format,
+            'add_new_line' => $addNewLine,
+            'line_format' =>
+                '[%datetime%] [%extra.' . RequestIdMiddleware::ATTRIBUTE . '%] %channel%.%level_name% - %message%',
+        ],
     ];
 
     // In dev env or the docker container, stream Shlink logs to stderr, otherwise send them to a file
     $useStreamForShlinkLogger = $isDev || env('SHLINK_RUNTIME') !== null;
 
     return [
-
         'logger' => [
-            'Shlink' => $useStreamForShlinkLogger ? [
-                'type' => LoggerType::STREAM->value,
-                'destination' => 'php://stderr',
-                ...$common,
-            ] : [
-                'type' => LoggerType::FILE->value,
-                ...$common,
-            ],
+            'Shlink' => $useStreamForShlinkLogger
+                ? [
+                    'type' => LoggerType::STREAM->value,
+                    'destination' => 'php://stderr',
+                    ...$buildCommonConfig(),
+                ] : [
+                    'type' => LoggerType::FILE->value,
+                    ...$buildCommonConfig(),
+                ],
             'Access' => [
                 'type' => LoggerType::STREAM->value,
                 'destination' => 'php://stderr',
-                'add_new_line' => ! runningInRoadRunner(),
-                ...$common,
+                ...$buildCommonConfig(!runningInRoadRunner()),
             ],
         ],
 
@@ -71,6 +75,5 @@ return (static function (): array {
         ConfigAbstractFactory::class => [
             RequestIdProvider::class => [RequestIdMiddleware::class],
         ],
-
     ];
 })();

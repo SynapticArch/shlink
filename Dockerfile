@@ -1,42 +1,42 @@
-FROM php:8.3-alpine3.19 as base
+FROM php:8.5-alpine3.22 AS base
 
 ARG SHLINK_VERSION=latest
-ENV SHLINK_VERSION ${SHLINK_VERSION}
+ENV SHLINK_VERSION=${SHLINK_VERSION}
 ARG SHLINK_RUNTIME=rr
-ENV SHLINK_RUNTIME ${SHLINK_RUNTIME}
+ENV SHLINK_RUNTIME=${SHLINK_RUNTIME}
 
-ENV USER_ID '1001'
-ENV PDO_SQLSRV_VERSION 5.12.0
-ENV MS_ODBC_DOWNLOAD 'b/9/f/b9f3cce4-3925-46d4-9f46-da08869c6486'
-ENV MS_ODBC_SQL_VERSION 18_18.1.1.1
-ENV LC_ALL 'C'
+ENV USER_ID='1001'
+ENV PDO_SQLSRV_VERSION='5.13.0'
+ENV MS_ODBC_DOWNLOAD='fae28b9a-d880-42fd-9b98-d779f0fdd77f'
+ENV MS_ODBC_SQL_VERSION='18_18.5.1.1'
+ENV LC_ALL='C'
 
 WORKDIR /etc/shlink
 
 # Install required PHP extensions
 RUN \
-    # Temp install dev dependencies needed to compile the extensions
-    apk add --no-cache --virtual .dev-deps sqlite-dev postgresql-dev icu-dev libzip-dev zlib-dev libpng-dev linux-headers && \
-    docker-php-ext-install -j"$(nproc)" pdo_mysql pdo_pgsql intl calendar sockets bcmath zip gd && \
+    # Temp install dev dependencies needed to compile the extensions \
+    apk add --no-cache --virtual .dev-deps sqlite-dev postgresql-dev icu-dev libzip-dev zlib-dev linux-headers && \
+    docker-php-ext-install -j"$(nproc)" pdo_mysql pdo_pgsql intl calendar sockets bcmath zip && \
     apk add --no-cache sqlite-libs && \
     docker-php-ext-install -j"$(nproc)" pdo_sqlite && \
-    # Remove temp dev extensions, and install prod equivalents that are required at runtime
+    # Remove temp dev extensions, and install prod equivalents that are required at runtime \
     apk del .dev-deps && \
     apk add --no-cache postgresql icu libzip libpng
 
 # Install sqlsrv driver for x86_64 builds
-RUN apk add --no-cache --virtual .phpize-deps ${PHPIZE_DEPS} unixodbc-dev && \
-    if [ $(uname -m) == "x86_64" ]; then \
+RUN if [ $(uname -m) == "x86_64" ]; then \
+      apk add --no-cache --virtual .phpize-deps ${PHPIZE_DEPS} unixodbc-dev && \
       wget https://download.microsoft.com/download/${MS_ODBC_DOWNLOAD}/msodbcsql${MS_ODBC_SQL_VERSION}-1_amd64.apk && \
       apk add --allow-untrusted msodbcsql${MS_ODBC_SQL_VERSION}-1_amd64.apk && \
       pecl install pdo_sqlsrv-${PDO_SQLSRV_VERSION} && \
       docker-php-ext-enable pdo_sqlsrv && \
-      rm msodbcsql${MS_ODBC_SQL_VERSION}-1_amd64.apk ; \
-    fi; \
-    apk del .phpize-deps
+      rm msodbcsql${MS_ODBC_SQL_VERSION}-1_amd64.apk && \
+      apk del .phpize-deps; \
+    fi
 
 # Install shlink
-FROM base as builder
+FROM base AS builder
 COPY . .
 COPY --from=composer:2 /usr/bin/composer ./composer.phar
 RUN apk add --no-cache git && \

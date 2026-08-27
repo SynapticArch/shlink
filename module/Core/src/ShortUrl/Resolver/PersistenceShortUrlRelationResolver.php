@@ -11,8 +11,8 @@ use Doctrine\ORM\Events;
 use Shlinkio\Shlink\Core\Config\Options\UrlShortenerOptions;
 use Shlinkio\Shlink\Core\Domain\Entity\Domain;
 use Shlinkio\Shlink\Core\Tag\Entity\Tag;
-use Symfony\Component\Lock\Lock;
 use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\SharedLockInterface;
 use Symfony\Component\Lock\Store\InMemoryStore;
 
 use function array_map;
@@ -24,9 +24,9 @@ class PersistenceShortUrlRelationResolver implements ShortUrlRelationResolverInt
     private array $memoizedNewDomains = [];
     /** @var array<string, Tag> */
     private array $memoizedNewTags = [];
-    /** @var array<string, Lock> */
+    /** @var array<string, SharedLockInterface> */
     private array $tagLocks = [];
-    /** @var array<string, Lock> */
+    /** @var array<string, SharedLockInterface> */
     private array $domainLocks = [];
 
     public function __construct(
@@ -76,22 +76,25 @@ class PersistenceShortUrlRelationResolver implements ShortUrlRelationResolverInt
         $tags = array_unique($tags);
         $repo = $this->em->getRepository(Tag::class);
 
-        return new Collections\ArrayCollection(array_map(function (string $tagName) use ($repo): Tag {
-            $this->lock($this->tagLocks, 'tag_' . $tagName);
+        return new Collections\ArrayCollection(array_map(
+            function (string $tagName) use ($repo): Tag {
+                $this->lock($this->tagLocks, 'tag_' . $tagName);
 
-            /** @var Tag|null $existingTag */
-            $existingTag = $repo->findOneBy(['name' => $tagName]);
-            if ($existingTag) {
-                $this->releaseLock($this->tagLocks, 'tag_' . $tagName);
-                return $existingTag;
-            }
+                /** @var Tag|null $existingTag */
+                $existingTag = $repo->findOneBy(['name' => $tagName]);
+                if ($existingTag) {
+                    $this->releaseLock($this->tagLocks, 'tag_' . $tagName);
+                    return $existingTag;
+                }
 
-            // Memoize only new tags, and let doctrine handle objects hydrated from persistence
-            $tag = $this->memoizeNewTag($tagName);
-            $this->em->persist($tag);
+                // Memoize only new tags, and let doctrine handle objects hydrated from persistence
+                $tag = $this->memoizeNewTag($tagName);
+                $this->em->persist($tag);
 
-            return $tag;
-        }, $tags));
+                return $tag;
+            },
+            $tags,
+        ));
     }
 
     private function memoizeNewTag(string $tagName): Tag
@@ -100,19 +103,19 @@ class PersistenceShortUrlRelationResolver implements ShortUrlRelationResolverInt
     }
 
     /**
-     * @param array<string, Lock> $locks
+     * @param array<string, SharedLockInterface> $locks
      */
     private function lock(array &$locks, string $name): void
     {
         // Lock dependency creation for up to 5 seconds. This will prevent errors when trying to create the same one
         // more than once in parallel.
-        $locks[$name] = $lock = $this->locker->createLock($name, 5);
-        $lock->acquire(true);
+        $locks[$name] = $lock = $this->locker->createLock($name, ttl: 5);
+        $lock->acquire(blocking: true);
     }
 
     /**
-    /**
-     * @param array<string, Lock> $locks
+     * /**
+     * @param array<string, SharedLockInterface> $locks
      */
     private function releaseLock(array &$locks, string $name): void
     {

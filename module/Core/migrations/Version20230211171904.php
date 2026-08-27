@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace ShlinkMigrations;
 
-use Doctrine\DBAL\Platforms\MySQLPlatform;
+use Doctrine\DBAL\Platforms\AbstractMySQLPlatform;
 use Doctrine\DBAL\Schema\Schema;
 use Doctrine\Migrations\AbstractMigration;
 
 final class Version20230211171904 extends AbstractMigration
 {
-    private const INDEX_NAME = 'IDX_visits_potential_bot';
+    private const string INDEX_NAME = 'IDX_visits_potential_bot';
 
     public function up(Schema $schema): void
     {
@@ -22,6 +22,6 @@ final class Version20230211171904 extends AbstractMigration
 
     public function isTransactional(): bool
     {
-        return ! ($this->connection->getDatabasePlatform() instanceof MySQLPlatform);
+        return !$this->connection->getDatabasePlatform() instanceof AbstractMySQLPlatform;
     }
 }

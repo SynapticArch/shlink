@@ -17,18 +17,18 @@ use Symfony\Component\Process\Process;
 class ProcessRunnerTest extends TestCase
 {
     private ProcessRunner $runner;
-    private MockObject & ProcessHelper $helper;
-    private MockObject & DebugFormatterHelper $formatter;
-    private MockObject & Process $process;
-    private MockObject & OutputInterface $output;
+    private MockObject&ProcessHelper $helper;
+    private MockObject&DebugFormatterHelper $formatter;
+    private MockObject&Process $process;
+    private MockObject&OutputInterface $output;
 
     protected function setUp(): void
     {
         $this->helper = $this->createMock(ProcessHelper::class);
         $this->formatter = $this->createMock(DebugFormatterHelper::class);
-        $helperSet = $this->createMock(HelperSet::class);
-        $helperSet->method('get')->with('debug_formatter')->willReturn($this->formatter);
-        $this->helper->method('getHelperSet')->with()->willReturn($helperSet);
+        $helperSet = $this->createStub(HelperSet::class);
+        $helperSet->method('get')->willReturn($this->formatter);
+        $this->helper->method('getHelperSet')->willReturn($helperSet);
         $this->process = $this->createMock(Process::class);
         $this->output = $this->createMock(OutputInterface::class);
 
@@ -76,10 +76,13 @@ class ProcessRunnerTest extends TestCase
         $this->process->expects($this->once())->method('mustRun')->withAnyParameters()->willReturnSelf();
         $this->process->expects($this->never())->method('isSuccessful');
         $this->process->expects($this->never())->method('getCommandLine');
-        $this->helper->expects($this->once())->method('wrapCallback')->withAnyParameters()->willReturn(
-            function (): void {
-            },
-        );
+        $this->helper
+            ->expects($this->once())
+            ->method('wrapCallback')
+            ->withAnyParameters()
+            ->willReturn(
+                static function (): void {},
+            );
         $this->formatter->expects($this->never())->method('start');
         $this->formatter->expects($this->never())->method('stop');
 

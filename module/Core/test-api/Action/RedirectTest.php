@@ -13,8 +13,9 @@ use Shlinkio\Shlink\TestUtils\ApiTest\ApiTestCase;
 use function sprintf;
 
 use const ShlinkioTest\Shlink\ANDROID_USER_AGENT;
-use const ShlinkioTest\Shlink\DESKTOP_USER_AGENT;
 use const ShlinkioTest\Shlink\IOS_USER_AGENT;
+use const ShlinkioTest\Shlink\LINUX_USER_AGENT;
+use const ShlinkioTest\Shlink\WINDOWS_USER_AGENT;
 
 class RedirectTest extends ApiTestCase
 {
@@ -41,9 +42,15 @@ class RedirectTest extends ApiTestCase
             ],
             'fb://profile/33138223345',
         ];
+        yield 'linux' => [
+            [
+                RequestOptions::HEADERS => ['User-Agent' => LINUX_USER_AGENT],
+            ],
+            'https://example.com/linux',
+        ];
         yield 'desktop' => [
             [
-                RequestOptions::HEADERS => ['User-Agent' => DESKTOP_USER_AGENT],
+                RequestOptions::HEADERS => ['User-Agent' => WINDOWS_USER_AGENT],
             ],
             'https://blog.alejandrocelaya.com/2017/12/09/acmailer-7-0-the-most-important-release-in-a-long-time/',
         ];
@@ -89,11 +96,12 @@ class RedirectTest extends ApiTestCase
             'https://blog.alejandrocelaya.com/2017/12/09/acmailer-7-0-the-most-important-release-in-a-long-time/',
         ];
 
-        $clientDetection = require __DIR__ . '/../../../../config/autoload/client-detection.global.php';
-        foreach ($clientDetection['ip_address_resolution']['headers_to_inspect'] as $header) {
+        $ipAddressConfig = require __DIR__ . '/../../../../config/autoload/ip-address.global.php';
+        $headers = $ipAddressConfig['rka']['ip_address']['headers_to_inspect'];
+        foreach ($headers as $header) {
             yield sprintf('rule: IP address in "%s" header', $header) => [
                 [
-                    RequestOptions::HEADERS => [$header => '1.2.3.4'],
+                    RequestOptions::HEADERS => [$header => $header !== 'Forwarded' ? '1.2.3.4' : 'for=1.2.3.4'],
                 ],
                 'https://example.com/static-ip-address',
             ];

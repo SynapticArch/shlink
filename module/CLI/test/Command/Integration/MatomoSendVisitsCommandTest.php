@@ -1,23 +1,26 @@
 <?php
 
+declare(strict_types=1);
+
 namespace ShlinkioTest\Shlink\CLI\Command\Integration;
 
 use Exception;
+use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\Attributes\TestWith;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 use Shlinkio\Shlink\CLI\Command\Integration\MatomoSendVisitsCommand;
-use Shlinkio\Shlink\CLI\Util\ExitCode;
 use Shlinkio\Shlink\Common\Util\DateRange;
 use Shlinkio\Shlink\Core\Matomo\MatomoOptions;
 use Shlinkio\Shlink\Core\Matomo\MatomoVisitSenderInterface;
 use Shlinkio\Shlink\Core\Matomo\Model\SendVisitsResult;
 use ShlinkioTest\Shlink\CLI\Util\CliTestUtils;
+use Symfony\Component\Console\Command\Command;
 
 class MatomoSendVisitsCommandTest extends TestCase
 {
-    private MockObject & MatomoVisitSenderInterface $visitSender;
+    private MockObject&MatomoVisitSenderInterface $visitSender;
 
     protected function setUp(): void
     {
@@ -27,10 +30,12 @@ class MatomoSendVisitsCommandTest extends TestCase
     #[Test]
     public function warningDisplayedIfIntegrationIsNotEnabled(): void
     {
+        $this->visitSender->expects($this->never())->method('sendVisitsInDateRange');
+
         [$output, $exitCode] = $this->executeCommand(matomoEnabled: false);
 
         self::assertStringContainsString('Matomo integration is not enabled in this Shlink instance', $output);
-        self::assertEquals(ExitCode::EXIT_WARNING, $exitCode);
+        self::assertEquals(Command::INVALID, $exitCode);
     }
 
     #[Test]
@@ -38,7 +43,7 @@ class MatomoSendVisitsCommandTest extends TestCase
     #[TestWith([false], 'not interactive')]
     public function warningIsOnlyDisplayedInInteractiveMode(bool $interactive): void
     {
-        $this->visitSender->method('sendVisitsInDateRange')->willReturn(new SendVisitsResult());
+        $this->visitSender->expects($this->once())->method('sendVisitsInDateRange')->willReturn(new SendVisitsResult());
 
         [$output] = $this->executeCommand(['y'], ['interactive' => $interactive]);
 
@@ -54,9 +59,12 @@ class MatomoSendVisitsCommandTest extends TestCase
     #[TestWith([false])]
     public function canCancelExecutionInInteractiveMode(bool $interactive): void
     {
-        $this->visitSender->expects($this->exactly($interactive ? 0 : 1))->method('sendVisitsInDateRange')->willReturn(
-            new SendVisitsResult(),
-        );
+        $this->visitSender
+            ->expects($this->exactly($interactive ? 0 : 1))
+            ->method('sendVisitsInDateRange')
+            ->willReturn(
+                new SendVisitsResult(),
+            );
         $this->executeCommand(['n'], ['interactive' => $interactive]);
     }
 
@@ -74,32 +82,35 @@ class MatomoSendVisitsCommandTest extends TestCase
         [$output, $exitCode] = $this->executeCommand(['y']);
 
         self::assertStringContainsString($expectedResultMessage, $output);
-        self::assertEquals(ExitCode::EXIT_SUCCESS, $exitCode);
+        self::assertEquals(Command::SUCCESS, $exitCode);
     }
 
     #[Test]
     public function printsResultOfSendingVisits(): void
     {
-        $this->visitSender->method('sendVisitsInDateRange')->willReturnCallback(
-            function (DateRange $_, MatomoSendVisitsCommand $command): SendVisitsResult {
-                // Call it a few times for an easier match of its result in the command putput
-                $command->success(0);
-                $command->success(1);
-                $command->success(2);
-                $command->error(3, new Exception('Error'));
-                $command->success(4);
-                $command->error(5, new Exception('Error'));
+        $this->visitSender
+            ->expects($this->once())
+            ->method('sendVisitsInDateRange')
+            ->willReturnCallback(
+                static function (DateRange $_, MatomoSendVisitsCommand $command): SendVisitsResult {
+                    // Call it a few times for an easier match of its result in the command putput
+                    $command->success(0);
+                    $command->success(1);
+                    $command->success(2);
+                    $command->error(3, new Exception('Error'));
+                    $command->success(4);
+                    $command->error(5, new Exception('Error'));
 
-                return new SendVisitsResult();
-            },
-        );
+                    return new SendVisitsResult();
+                },
+            );
 
         [$output] = $this->executeCommand(['y']);
 
         self::assertStringContainsString('...E.E', $output);
     }
 
-    #[Test]
+    #[Test, AllowMockObjectsWithoutExpectations]
     #[TestWith([[], 'All time'])]
     #[TestWith([['--since' => '2023-05-01'], 'Since 2023-05-01 00:00:00'])]
     #[TestWith([['--until' => '2023-05-01'], 'Until 2023-05-01 00:00:00'])]
@@ -114,6 +125,7 @@ class MatomoSendVisitsCommandTest extends TestCase
     }
 
     /**
+     * @param list<string> $input
      * @return array{string, int, MatomoSendVisitsCommand}
      */
     private function executeCommand(

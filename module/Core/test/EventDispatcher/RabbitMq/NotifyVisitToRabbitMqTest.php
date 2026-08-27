@@ -17,7 +17,8 @@ use RuntimeException;
 use Shlinkio\Shlink\Common\UpdatePublishing\PublishingHelperInterface;
 use Shlinkio\Shlink\Common\UpdatePublishing\Update;
 use Shlinkio\Shlink\Core\Config\Options\RabbitMqOptions;
-use Shlinkio\Shlink\Core\EventDispatcher\Event\VisitLocated;
+use Shlinkio\Shlink\Core\Config\Options\RealTimeUpdatesOptions;
+use Shlinkio\Shlink\Core\EventDispatcher\Event\UrlVisited;
 use Shlinkio\Shlink\Core\EventDispatcher\PublishingUpdatesGeneratorInterface;
 use Shlinkio\Shlink\Core\EventDispatcher\RabbitMq\NotifyVisitToRabbitMq;
 use Shlinkio\Shlink\Core\ShortUrl\Entity\ShortUrl;
@@ -31,10 +32,10 @@ use function count;
 
 class NotifyVisitToRabbitMqTest extends TestCase
 {
-    private MockObject & PublishingHelperInterface $helper;
-    private MockObject & PublishingUpdatesGeneratorInterface $updatesGenerator;
-    private MockObject & EntityManagerInterface $em;
-    private MockObject & LoggerInterface $logger;
+    private MockObject&PublishingHelperInterface $helper;
+    private MockObject&PublishingUpdatesGeneratorInterface $updatesGenerator;
+    private MockObject&EntityManagerInterface $em;
+    private MockObject&LoggerInterface $logger;
 
     protected function setUp(): void
     {
@@ -51,8 +52,9 @@ class NotifyVisitToRabbitMqTest extends TestCase
         $this->em->expects($this->never())->method('find');
         $this->logger->expects($this->never())->method('warning');
         $this->logger->expects($this->never())->method('debug');
+        $this->updatesGenerator->expects($this->never())->method('newVisitUpdate');
 
-        ($this->listener(new RabbitMqOptions(enabled: false)))(new VisitLocated('123'));
+        $this->listener(new RabbitMqOptions(enabled: false))(new UrlVisited('123'));
     }
 
     #[Test]
@@ -60,45 +62,56 @@ class NotifyVisitToRabbitMqTest extends TestCase
     {
         $visitId = '123';
         $this->em->expects($this->once())->method('find')->with(Visit::class, $visitId)->willReturn(null);
-        $this->logger->expects($this->once())->method('warning')->with(
-            'Tried to notify {name} for visit with id "{visitId}", but it does not exist.',
-            ['visitId' => $visitId, 'name' => 'RabbitMQ'],
-        );
+        $this->logger
+            ->expects($this->once())
+            ->method('warning')
+            ->with(
+                'Tried to notify {name} for visit with id "{visitId}", but it does not exist.',
+                ['visitId' => $visitId, 'name' => 'RabbitMQ'],
+            );
         $this->logger->expects($this->never())->method('debug');
         $this->helper->expects($this->never())->method('publishUpdate');
+        $this->updatesGenerator->expects($this->never())->method('newVisitUpdate');
 
-        ($this->listener())(new VisitLocated($visitId));
+        $this->listener()(new UrlVisited($visitId));
     }
 
+    /**
+     * @param non-empty-string[] $expectedChannels
+     */
     #[Test, DataProvider('provideVisits')]
     public function expectedChannelsAreNotifiedBasedOnTheVisitType(Visit $visit, array $expectedChannels): void
     {
         $visitId = '123';
         $this->em->expects($this->once())->method('find')->with(Visit::class, $visitId)->willReturn($visit);
         array_walk($expectedChannels, function (string $method): void {
-            $this->updatesGenerator->expects($this->once())->method($method)->with(
-                $this->isInstanceOf(Visit::class),
-            )->willReturn(Update::forTopicAndPayload('', []));
+            $this->updatesGenerator
+                ->expects($this->once())
+                ->method($method)
+                ->with(
+                    $this->isInstanceOf(Visit::class),
+                )
+                ->willReturn(Update::forTopicAndPayload('', []));
         });
-        $this->helper->expects($this->exactly(count($expectedChannels)))->method('publishUpdate')->with(
-            $this->isInstanceOf(Update::class),
-        );
+        $this->helper
+            ->expects($this->exactly(count($expectedChannels)))
+            ->method('publishUpdate')
+            ->with(
+                $this->isInstanceOf(Update::class),
+            );
         $this->logger->expects($this->never())->method('debug');
 
-        ($this->listener())(new VisitLocated($visitId));
+        $this->listener()(new UrlVisited($visitId));
     }
 
     public static function provideVisits(): iterable
     {
-        $visitor = Visitor::emptyInstance();
+        $visitor = Visitor::empty();
 
         yield 'orphan visit' => [Visit::forBasePath($visitor), ['newOrphanVisitUpdate']];
         yield 'non-orphan visit' => [
             Visit::forValidShortUrl(
-                ShortUrl::create(ShortUrlCreation::fromRawData([
-                    'longUrl' => 'https://foo',
-                    'customSlug' => 'bar',
-                ])),
+                ShortUrl::create(new ShortUrlCreation('https://foo', customSlug: 'bar')),
                 $visitor,
             ),
             ['newShortUrlVisitUpdate', 'newVisitUpdate'],
@@ -109,19 +122,30 @@ class NotifyVisitToRabbitMqTest extends TestCase
     public function printsDebugMessageInCaseOfError(Throwable $e): void
     {
         $visitId = '123';
-        $this->em->expects($this->once())->method('find')->with(Visit::class, $visitId)->willReturn(
-            Visit::forBasePath(Visitor::emptyInstance()),
-        );
-        $this->updatesGenerator->expects($this->once())->method('newOrphanVisitUpdate')->with(
-            $this->isInstanceOf(Visit::class),
-        )->willReturn(Update::forTopicAndPayload('', []));
+        $this->em
+            ->expects($this->once())
+            ->method('find')
+            ->with(Visit::class, $visitId)
+            ->willReturn(
+                Visit::forBasePath(Visitor::empty()),
+            );
+        $this->updatesGenerator
+            ->expects($this->once())
+            ->method('newOrphanVisitUpdate')
+            ->with(
+                $this->isInstanceOf(Visit::class),
+            )
+            ->willReturn(Update::forTopicAndPayload('', []));
         $this->helper->expects($this->once())->method('publishUpdate')->withAnyParameters()->willThrowException($e);
-        $this->logger->expects($this->once())->method('debug')->with(
-            'Error while trying to notify {name} with new visit. {e}',
-            ['e' => $e, 'name' => 'RabbitMQ'],
-        );
+        $this->logger
+            ->expects($this->once())
+            ->method('debug')
+            ->with(
+                'Error while trying to notify {name} with new visit. {e}',
+                ['e' => $e, 'name' => 'RabbitMQ'],
+            );
 
-        ($this->listener())(new VisitLocated($visitId));
+        $this->listener()(new UrlVisited($visitId));
     }
 
     public static function provideExceptions(): iterable
@@ -141,8 +165,10 @@ class NotifyVisitToRabbitMqTest extends TestCase
         $this->em->expects($this->once())->method('find')->with(Visit::class, $visitId)->willReturn($visit);
         $setup($this->updatesGenerator);
         $expect($this->helper, $this->updatesGenerator);
+        $this->logger->expects($this->never())->method('warning');
+        $this->logger->expects($this->never())->method('debug');
 
-        ($this->listener())(new VisitLocated($visitId));
+        $this->listener()(new UrlVisited($visitId));
     }
 
     public static function providePayloads(): iterable
@@ -152,28 +178,38 @@ class NotifyVisitToRabbitMqTest extends TestCase
         $never = static fn () => $exactly(0);
 
         yield 'non-orphan visit' => [
-            Visit::forValidShortUrl(ShortUrl::withLongUrl('https://longUrl'), Visitor::emptyInstance()),
-            function (MockObject & PublishingUpdatesGeneratorInterface $updatesGenerator) use ($once, $never): void {
+            Visit::forValidShortUrl(ShortUrl::withLongUrl('https://longUrl'), Visitor::empty()),
+            static function (MockObject&PublishingUpdatesGeneratorInterface $updatesGenerator) use (
+                $once,
+                $never,
+            ): void {
                 $update = Update::forTopicAndPayload('', []);
                 $updatesGenerator->expects($never())->method('newOrphanVisitUpdate');
-                $updatesGenerator->expects($once())->method('newVisitUpdate')->withAnyParameters()->willReturn(
-                    $update,
-                );
+                $updatesGenerator
+                    ->expects($once())
+                    ->method('newVisitUpdate')
+                    ->withAnyParameters()
+                    ->willReturn(
+                        $update,
+                    );
                 $updatesGenerator->expects($once())->method('newShortUrlVisitUpdate')->willReturn($update);
             },
-            function (MockObject & PublishingHelperInterface $helper) use ($exactly): void {
+            static function (MockObject&PublishingHelperInterface $helper) use ($exactly): void {
                 $helper->expects($exactly(2))->method('publishUpdate')->with(self::isInstanceOf(Update::class));
             },
         ];
         yield 'orphan visit' => [
-            Visit::forBasePath(Visitor::emptyInstance()),
-            function (MockObject & PublishingUpdatesGeneratorInterface $updatesGenerator) use ($once, $never): void {
+            Visit::forBasePath(Visitor::empty()),
+            static function (MockObject&PublishingUpdatesGeneratorInterface $updatesGenerator) use (
+                $once,
+                $never,
+            ): void {
                 $update = Update::forTopicAndPayload('', []);
                 $updatesGenerator->expects($once())->method('newOrphanVisitUpdate')->willReturn($update);
                 $updatesGenerator->expects($never())->method('newVisitUpdate');
                 $updatesGenerator->expects($never())->method('newShortUrlVisitUpdate');
             },
-            function (MockObject & PublishingHelperInterface $helper) use ($once): void {
+            static function (MockObject&PublishingHelperInterface $helper) use ($once): void {
                 $helper->expects($once())->method('publishUpdate')->with(self::isInstanceOf(Update::class));
             },
         ];
@@ -186,6 +222,7 @@ class NotifyVisitToRabbitMqTest extends TestCase
             $this->updatesGenerator,
             $this->em,
             $this->logger,
+            new RealTimeUpdatesOptions(),
             $options ?? new RabbitMqOptions(enabled: true),
         );
     }

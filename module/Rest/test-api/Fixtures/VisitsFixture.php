@@ -23,43 +23,67 @@ class VisitsFixture extends AbstractFixture implements DependentFixtureInterface
     {
         /** @var ShortUrl $abcShortUrl */
         $abcShortUrl = $this->getReference('abc123_short_url');
-        $manager->persist(
-            Visit::forValidShortUrl($abcShortUrl, new Visitor('shlink-tests-agent', '', '44.55.66.77', '')),
-        );
         $manager->persist(Visit::forValidShortUrl(
             $abcShortUrl,
-            new Visitor('shlink-tests-agent', 'https://google.com', '4.5.6.7', ''),
+            Visitor::fromParams(userAgent: 'shlink-tests-agent', remoteAddress: '44.55.66.77'),
         ));
-        $manager->persist(Visit::forValidShortUrl($abcShortUrl, new Visitor('shlink-tests-agent', '', '1.2.3.4', '')));
+        $manager->persist(Visit::forValidShortUrl(
+            $abcShortUrl,
+            Visitor::fromParams('shlink-tests-agent', 'https://google.com', '4.5.6.7'),
+        ));
+        $manager->persist(Visit::forValidShortUrl(
+            $abcShortUrl,
+            Visitor::fromParams(userAgent: 'shlink-tests-agent', remoteAddress: '1.2.3.4'),
+        ));
 
         /** @var ShortUrl $defShortUrl */
         $defShortUrl = $this->getReference('def456_short_url');
-        $manager->persist(
-            Visit::forValidShortUrl($defShortUrl, new Visitor('cf-facebook', '', '127.0.0.1', '')),
-        );
-        $manager->persist(
-            Visit::forValidShortUrl($defShortUrl, new Visitor('shlink-tests-agent', 'https://app.shlink.io', '', '')),
-        );
+        $manager->persist(Visit::forValidShortUrl(
+            $defShortUrl,
+            Visitor::fromParams(userAgent: 'cf-facebook', remoteAddress: '127.0.0.1'),
+        ));
+        $manager->persist(Visit::forValidShortUrl(
+            $defShortUrl,
+            Visitor::fromParams('shlink-tests-agent', 'https://app.shlink.io', ''),
+        ));
 
         /** @var ShortUrl $ghiShortUrl */
         $ghiShortUrl = $this->getReference('ghi789_short_url');
-        $manager->persist(Visit::forValidShortUrl($ghiShortUrl, new Visitor('shlink-tests-agent', '', '1.2.3.4', '')));
-        $manager->persist(
-            Visit::forValidShortUrl($ghiShortUrl, new Visitor('shlink-tests-agent', 'https://app.shlink.io', '', '')),
-        );
+        $manager->persist(Visit::forValidShortUrl(
+            $ghiShortUrl,
+            Visitor::fromParams(userAgent: 'shlink-tests-agent', remoteAddress: '1.2.3.4'),
+        ));
+        $manager->persist(Visit::forValidShortUrl(
+            $ghiShortUrl,
+            Visitor::fromParams('shlink-tests-agent', 'https://app.shlink.io', ''),
+        ));
 
+        // Orphan visits (s.test is the default domain in tests env)
         $manager->persist($this->setVisitDate(
-            fn () => Visit::forBasePath(new Visitor('shlink-tests-agent', 'https://s.test', '1.2.3.4', '')),
+            static fn () => Visit::forBasePath(Visitor::fromParams(
+                'shlink-tests-agent',
+                'https://s.test',
+                '1.2.3.4',
+                visitedUrl: 'https://s.test/foo',
+            )),
             '2020-01-01',
         ));
         $manager->persist($this->setVisitDate(
-            fn () => Visit::forRegularNotFound(
-                new Visitor('shlink-tests-agent', 'https://s.test/foo/bar', '1.2.3.4', ''),
-            ),
+            static fn () => Visit::forRegularNotFound(Visitor::fromParams(
+                'shlink-tests-agent',
+                'https://s.test/foo/bar',
+                '1.2.3.4',
+                visitedUrl: 'https://s.test/bar',
+            )),
             '2020-02-01',
         ));
         $manager->persist($this->setVisitDate(
-            fn () => Visit::forInvalidShortUrl(new Visitor('cf-facebook', 'https://s.test/foo', '1.2.3.4', 'foo.com')),
+            static fn () => Visit::forInvalidShortUrl(Visitor::fromParams(
+                'cf-facebook',
+                'https://s.test/foo',
+                '1.2.3.4',
+                visitedUrl: 'https://example.com/short',
+            )),
             '2020-03-01',
         ));
 

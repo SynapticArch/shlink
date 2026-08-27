@@ -17,14 +17,13 @@ use function urlencode;
 
 class NotFoundRedirectResolver implements NotFoundRedirectResolverInterface
 {
-    private const DOMAIN_PLACEHOLDER = '{DOMAIN}';
-    private const ORIGINAL_PATH_PLACEHOLDER = '{ORIGINAL_PATH}';
+    private const string DOMAIN_PLACEHOLDER = '{DOMAIN}';
+    private const string ORIGINAL_PATH_PLACEHOLDER = '{ORIGINAL_PATH}';
 
     public function __construct(
         private readonly RedirectResponseHelperInterface $redirectResponseHelper,
         private readonly LoggerInterface $logger,
-    ) {
-    }
+    ) {}
 
     public function resolveRedirectResponse(
         NotFoundType $notFoundType,
@@ -32,10 +31,9 @@ class NotFoundRedirectResolver implements NotFoundRedirectResolverInterface
         UriInterface $currentUri,
     ): ResponseInterface|null {
         $urlToRedirectTo = match (true) {
-            $notFoundType->isBaseUrl() && $config->hasBaseUrlRedirect() => $config->baseUrlRedirect(),
-            $notFoundType->isRegularNotFound() && $config->hasRegular404Redirect() => $config->regular404Redirect(),
-            $notFoundType->isInvalidShortUrl() && $config->hasInvalidShortUrlRedirect() =>
-                $config->invalidShortUrlRedirect(),
+            $notFoundType->isBaseUrl() => $config->baseUrlRedirect,
+            $notFoundType->isRegularNotFound() => $config->regular404Redirect,
+            $notFoundType->isInvalidShortUrl() => $config->invalidShortUrlRedirect,
             default => null,
         };
 
@@ -66,10 +64,7 @@ class NotFoundRedirectResolver implements NotFoundRedirectResolverInterface
         $replacePlaceholders = static function (
             callable $modifier,
             string $value,
-        ) use (
-            $path,
-            $domain,
-        ): string {
+        ) use ($path, $domain): string {
             $value = str_replace(urlencode(self::DOMAIN_PLACEHOLDER), $modifier($domain), $value);
             return str_replace(urlencode(self::ORIGINAL_PATH_PLACEHOLDER), $modifier($path), $value);
         };

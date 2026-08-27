@@ -1,29 +1,40 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Shlinkio\Shlink\Core\Model;
 
-use Detection\MobileDetect;
+use donatj\UserAgent\Platforms;
+
+use function Shlinkio\Shlink\Core\parseUserAgent;
 
 enum DeviceType: string
 {
     case ANDROID = 'android';
     case IOS = 'ios';
+    case MOBILE = 'mobile';
+    case WINDOWS = 'windows';
+    case MACOS = 'macos';
+    case LINUX = 'linux';
+    case CHROMEOS = 'chromeos';
     case DESKTOP = 'desktop';
 
-    public static function matchFromUserAgent(string $userAgent): self|null
+    /**
+     * Determines which device types provided user agent matches. It could be more than one
+     * @return self[]
+     */
+    public static function matchFromUserAgent(string $userAgent): array
     {
-        $detect = new MobileDetect();
-        $detect->setUserAgent($userAgent);
+        $ua = parseUserAgent($userAgent);
 
-        return match (true) {
-//            $detect->is('iOS') && $detect->isTablet() => self::IOS, // TODO To detect iPad only
-//            $detect->is('iOS') && ! $detect->isTablet() => self::IOS, // TODO To detect iPhone only
-//            $detect->is('androidOS') && $detect->isTablet() => self::ANDROID, // TODO To detect Android tablets
-//            $detect->is('androidOS') && ! $detect->isTablet() => self::ANDROID, // TODO To detect Android phones
-            $detect->is('iOS') => self::IOS, // Detects both iPhone and iPad
-            $detect->is('androidOS') => self::ANDROID, // Detects both android phones and android tablets
-            ! $detect->isMobile() && ! $detect->isTablet() => self::DESKTOP,
-            default => null,
+        return match ($ua->platform()) {
+            Platforms::IPHONE, Platforms::IPAD => [self::IOS, self::MOBILE], // iPhone and iPad (except iPadOS 13+)
+            Platforms::ANDROID => [self::ANDROID, self::MOBILE], // android phones and android tablets
+            Platforms::LINUX => [self::LINUX, self::DESKTOP],
+            Platforms::WINDOWS => [self::WINDOWS, self::DESKTOP],
+            Platforms::MACINTOSH => [self::MACOS, self::DESKTOP],
+            Platforms::CHROME_OS => [self::CHROMEOS, self::DESKTOP],
+            default => [],
         };
     }
 }

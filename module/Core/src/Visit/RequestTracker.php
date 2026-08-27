@@ -12,34 +12,38 @@ use Shlinkio\Shlink\Core\ErrorHandler\Model\NotFoundType;
 use Shlinkio\Shlink\Core\Exception\InvalidIpFormatException;
 use Shlinkio\Shlink\Core\ShortUrl\Entity\ShortUrl;
 use Shlinkio\Shlink\Core\Util\IpAddressUtils;
+use Shlinkio\Shlink\Core\Visit\Entity\Visit;
 use Shlinkio\Shlink\Core\Visit\Model\Visitor;
 
 use function Shlinkio\Shlink\Core\ipAddressFromRequest;
 
 readonly class RequestTracker implements RequestTrackerInterface, RequestMethodInterface
 {
-    public function __construct(private VisitsTrackerInterface $visitsTracker, private TrackingOptions $trackingOptions)
-    {
-    }
+    public function __construct(
+        private VisitsTrackerInterface $visitsTracker,
+        private TrackingOptions $trackingOptions,
+    ) {}
 
-    public function trackIfApplicable(ShortUrl $shortUrl, ServerRequestInterface $request): void
+    public function trackIfApplicable(ShortUrl $shortUrl, ServerRequestInterface $request): Visit|null
     {
-        if ($this->shouldTrackRequest($request)) {
-            $this->visitsTracker->track($shortUrl, Visitor::fromRequest($request));
+        if (!$this->shouldTrackRequest($request)) {
+            return null;
         }
+
+        return $this->visitsTracker->track($shortUrl, Visitor::fromRequest($request));
     }
 
-    public function trackNotFoundIfApplicable(ServerRequestInterface $request): void
+    public function trackNotFoundIfApplicable(ServerRequestInterface $request): Visit|null
     {
-        if (! $this->shouldTrackRequest($request)) {
-            return;
+        if (!$this->shouldTrackRequest($request)) {
+            return null;
         }
 
         /** @var NotFoundType|null $notFoundType */
         $notFoundType = $request->getAttribute(NotFoundType::class);
         $visitor = Visitor::fromRequest($request);
 
-        match (true) {
+        return match (true) {
             $notFoundType?->isBaseUrl() => $this->visitsTracker->trackBaseUrlVisit($visitor),
             $notFoundType?->isRegularNotFound() => $this->visitsTracker->trackRegularNotFoundVisit($visitor),
             $notFoundType?->isInvalidShortUrl() => $this->visitsTracker->trackInvalidShortUrlVisit($visitor),
@@ -60,12 +64,12 @@ readonly class RequestTracker implements RequestTrackerInterface, RequestMethodI
         }
 
         $query = $request->getQueryParams();
-        return ! $this->trackingOptions->queryHasDisableTrackParam($query);
+        return !$this->trackingOptions->queryHasDisableTrackParam($query);
     }
 
     private function shouldDisableTrackingFromAddress(string|null $remoteAddr): bool
     {
-        if ($remoteAddr === null || ! $this->trackingOptions->hasDisableTrackingFrom()) {
+        if ($remoteAddr === null || !$this->trackingOptions->hasDisableTrackingFrom()) {
             return false;
         }
 

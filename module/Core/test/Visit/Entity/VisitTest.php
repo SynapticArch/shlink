@@ -22,16 +22,23 @@ class VisitTest extends TestCase
     #[Test, DataProvider('provideUserAgents')]
     public function isProperlyJsonSerialized(string $userAgent, bool $expectedToBePotentialBot): void
     {
-        $visit = Visit::forValidShortUrl(ShortUrl::createFake(), new Visitor($userAgent, 'some site', '1.2.3.4', ''));
+        $visit = Visit::forValidShortUrl(
+            ShortUrl::createFake(),
+            Visitor::fromParams($userAgent, 'some site', '1.2.3.4'),
+        );
 
-        self::assertEquals([
-            'referer' => 'some site',
-            'date' => $visit->date->toAtomString(),
-            'userAgent' => $userAgent,
-            'visitLocation' => null,
-            'potentialBot' => $expectedToBePotentialBot,
-            'visitedUrl' => $visit->visitedUrl,
-        ], $visit->jsonSerialize());
+        self::assertEquals(
+            [
+                'referer' => 'some site',
+                'date' => $visit->date->toAtomString(),
+                'userAgent' => $userAgent,
+                'visitLocation' => null,
+                'potentialBot' => $expectedToBePotentialBot,
+                'visitedUrl' => $visit->visitedUrl,
+                'redirectUrl' => $visit->redirectUrl,
+            ],
+            $visit->jsonSerialize(),
+        );
     }
 
     public static function provideUserAgents(): iterable
@@ -55,7 +62,7 @@ class VisitTest extends TestCase
     public static function provideOrphanVisits(): iterable
     {
         yield 'base path visit' => [
-            $visit = Visit::forBasePath(Visitor::emptyInstance()),
+            $visit = Visit::forBasePath(Visitor::empty()),
             [
                 'referer' => '',
                 'date' => $visit->date->toAtomString(),
@@ -64,11 +71,13 @@ class VisitTest extends TestCase
                 'potentialBot' => false,
                 'visitedUrl' => '',
                 'type' => VisitType::BASE_URL->value,
+                'redirectUrl' => null,
             ],
         ];
         yield 'invalid short url visit' => [
             $visit = Visit::forInvalidShortUrl(Visitor::fromRequest(
-                ServerRequestFactory::fromGlobals()->withHeader('User-Agent', 'foo')
+                ServerRequestFactory::fromGlobals()
+                    ->withHeader('User-Agent', 'foo')
                     ->withHeader('Referer', 'bar')
                     ->withUri(new Uri('https://example.com/foo')),
             )),
@@ -80,16 +89,18 @@ class VisitTest extends TestCase
                 'potentialBot' => false,
                 'visitedUrl' => 'https://example.com/foo',
                 'type' => VisitType::INVALID_SHORT_URL->value,
+                'redirectUrl' => null,
             ],
         ];
         yield 'regular 404 visit' => [
             $visit = Visit::forRegularNotFound(
                 Visitor::fromRequest(
-                    ServerRequestFactory::fromGlobals()->withHeader('User-Agent', 'user-agent')
+                    ServerRequestFactory::fromGlobals()
+                        ->withHeader('User-Agent', 'user-agent')
                         ->withHeader('Referer', 'referer')
                         ->withUri(new Uri('https://s.test/foo/bar')),
                 ),
-            )->locate($location = VisitLocation::fromGeolocation(Location::emptyInstance())),
+            )->locate($location = VisitLocation::fromLocation(Location::empty())),
             [
                 'referer' => 'referer',
                 'date' => $visit->date->toAtomString(),
@@ -98,6 +109,7 @@ class VisitTest extends TestCase
                 'potentialBot' => false,
                 'visitedUrl' => 'https://s.test/foo/bar',
                 'type' => VisitType::REGULAR_404->value,
+                'redirectUrl' => null,
             ],
         ];
     }
@@ -110,7 +122,7 @@ class VisitTest extends TestCase
     ): void {
         $visit = Visit::forValidShortUrl(
             ShortUrl::createFake(),
-            new Visitor('Chrome', 'some site', $address, ''),
+            Visitor::fromParams('Chrome', 'some site', $address),
             $anonymize,
         );
 

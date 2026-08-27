@@ -6,8 +6,10 @@ namespace ShlinkioTest\Shlink\Core\ShortUrl;
 
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\ORM\EntityManagerInterface;
+use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\MockObject\MockObject;
+use PHPUnit\Framework\MockObject\Stub;
 use PHPUnit\Framework\TestCase;
 use Shlinkio\Shlink\Core\Config\Options\DeleteShortUrlsOptions;
 use Shlinkio\Shlink\Core\Exception\DeleteShortUrlException;
@@ -24,23 +26,24 @@ use function array_map;
 use function range;
 use function sprintf;
 
+#[AllowMockObjectsWithoutExpectations]
 class DeleteShortUrlServiceTest extends TestCase
 {
-    private MockObject & EntityManagerInterface $em;
-    private MockObject & ShortUrlResolverInterface $urlResolver;
-    private MockObject & ExpiredShortUrlsRepository $expiredShortUrlsRepository;
+    private MockObject&EntityManagerInterface $em;
+    private Stub&ShortUrlResolverInterface $urlResolver;
+    private MockObject&ExpiredShortUrlsRepository $expiredShortUrlsRepository;
     private string $shortCode;
 
     protected function setUp(): void
     {
         $shortUrl = ShortUrl::createFake()->setVisits(new ArrayCollection(
-            array_map(fn () => Visit::forValidShortUrl(ShortUrl::createFake(), Visitor::emptyInstance()), range(0, 10)),
+            array_map(static fn () => Visit::forValidShortUrl(ShortUrl::createFake(), Visitor::empty()), range(0, 10)),
         ));
-        $this->shortCode = $shortUrl->getShortCode();
+        $this->shortCode = $shortUrl->shortCode;
 
         $this->em = $this->createMock(EntityManagerInterface::class);
 
-        $this->urlResolver = $this->createMock(ShortUrlResolverInterface::class);
+        $this->urlResolver = $this->createStub(ShortUrlResolverInterface::class);
         $this->urlResolver->method('resolveShortUrl')->willReturn($shortUrl);
 
         $this->expiredShortUrlsRepository = $this->createMock(ExpiredShortUrlsRepository::class);
@@ -51,6 +54,7 @@ class DeleteShortUrlServiceTest extends TestCase
     {
         $service = $this->createService();
 
+        $this->em->expects($this->never())->method('remove');
         $this->expectException(DeleteShortUrlException::class);
         $this->expectExceptionMessage(sprintf(
             'Impossible to delete short URL with short code "%s", since it has more than "5" visits.',
@@ -65,9 +69,13 @@ class DeleteShortUrlServiceTest extends TestCase
     {
         $service = $this->createService();
 
-        $this->em->expects($this->once())->method('remove')->with($this->isInstanceOf(ShortUrl::class))->willReturn(
-            null,
-        );
+        $this->em
+            ->expects($this->once())
+            ->method('remove')
+            ->with($this->isInstanceOf(ShortUrl::class))
+            ->willReturn(
+                null,
+            );
         $this->em->expects($this->once())->method('flush')->with()->willReturn(null);
 
         $service->deleteByShortCode(ShortUrlIdentifier::fromShortCodeAndDomain($this->shortCode), true);
@@ -78,9 +86,13 @@ class DeleteShortUrlServiceTest extends TestCase
     {
         $service = $this->createService(false);
 
-        $this->em->expects($this->once())->method('remove')->with($this->isInstanceOf(ShortUrl::class))->willReturn(
-            null,
-        );
+        $this->em
+            ->expects($this->once())
+            ->method('remove')
+            ->with($this->isInstanceOf(ShortUrl::class))
+            ->willReturn(
+                null,
+            );
         $this->em->expects($this->once())->method('flush')->with()->willReturn(null);
 
         $service->deleteByShortCode(ShortUrlIdentifier::fromShortCodeAndDomain($this->shortCode));
@@ -91,10 +103,8 @@ class DeleteShortUrlServiceTest extends TestCase
     {
         $service = $this->createService(true, 100);
 
-        $this->em->expects($this->once())->method('remove')->with($this->isInstanceOf(ShortUrl::class))->willReturn(
-            null,
-        );
-        $this->em->expects($this->once())->method('flush')->with()->willReturn(null);
+        $this->em->expects($this->once())->method('remove')->with($this->isInstanceOf(ShortUrl::class));
+        $this->em->expects($this->once())->method('flush');
 
         $service->deleteByShortCode(ShortUrlIdentifier::fromShortCodeAndDomain($this->shortCode));
     }
@@ -123,9 +133,14 @@ class DeleteShortUrlServiceTest extends TestCase
 
     private function createService(bool $checkVisitsThreshold = true, int $visitsThreshold = 5): DeleteShortUrlService
     {
-        return new DeleteShortUrlService($this->em, new DeleteShortUrlsOptions(
-            $visitsThreshold,
-            $checkVisitsThreshold,
-        ), $this->urlResolver, $this->expiredShortUrlsRepository);
+        return new DeleteShortUrlService(
+            $this->em,
+            new DeleteShortUrlsOptions(
+                $visitsThreshold,
+                $checkVisitsThreshold,
+            ),
+            $this->urlResolver,
+            $this->expiredShortUrlsRepository,
+        );
     }
 }

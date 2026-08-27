@@ -24,7 +24,7 @@ use Symfony\Component\Console\Tester\CommandTester;
 class GetOrphanVisitsCommandTest extends TestCase
 {
     private CommandTester $commandTester;
-    private MockObject & VisitsStatsHelperInterface $visitsHelper;
+    private MockObject&VisitsStatsHelperInterface $visitsHelper;
 
     protected function setUp(): void
     {
@@ -37,27 +37,33 @@ class GetOrphanVisitsCommandTest extends TestCase
     #[TestWith([['--type' => OrphanVisitType::BASE_URL->value], true])]
     public function outputIsProperlyGenerated(array $args, bool $includesType): void
     {
-        $visit = Visit::forBasePath(new Visitor('bar', 'foo', '', ''))->locate(
-            VisitLocation::fromGeolocation(new Location('', 'Spain', '', 'Madrid', 0, 0, '')),
+        $visit = Visit::forBasePath(Visitor::fromParams('bar', 'foo', ''))->locate(
+            VisitLocation::fromLocation(new Location('', 'Spain', '', 'Madrid', 0, 0, '')),
         );
-        $this->visitsHelper->expects($this->once())->method('orphanVisits')->with($this->callback(
-            fn (OrphanVisitsParams $param) => (
-                ($includesType && $param->type !== null) || (!$includesType && $param->type === null)
-            ),
-        ))->willReturn(new Paginator(new ArrayAdapter([$visit])));
+        $this->visitsHelper
+            ->expects($this->once())
+            ->method('orphanVisits')
+            ->with($this->callback(
+                static fn (OrphanVisitsParams $param) => (
+                    ($includesType && $param->type !== null)
+                    || (!$includesType && $param->type === null)
+                ),
+            ))
+            ->willReturn(new Paginator(new ArrayAdapter([$visit])));
 
         $this->commandTester->execute($args);
         $output = $this->commandTester->getDisplay();
+        $type = OrphanVisitType::BASE_URL->value;
 
         self::assertEquals(
             <<<OUTPUT
-            +---------+---------------------------+------------+---------+--------+----------+
-            | Referer | Date                      | User agent | Country | City   | Type     |
-            +---------+---------------------------+------------+---------+--------+----------+
-            | foo     | {$visit->date->toAtomString()} | bar        | Spain   | Madrid | base_url |
-            +---------+---------------------------+------------+---------+--------+----------+
+                +---------------------------+---------------+------------+---------+---------+--------+--------+-------------+--------------+----------+
+                | Date                      | Potential bot | User agent | Referer | Country | Region | City   | Visited URL | Redirect URL | Type     |
+                +---------------------------+---------------+------------+---------+---------+--------+--------+-------------+--------------+----------+
+                | {$visit->date->toAtomString()} |               | bar        | foo     | Spain   |        | Madrid |             | Unknown      | {$type} |
+                +---------------------------+---------------+------------+--- Page 1 of 1 ---+--------+--------+-------------+--------------+----------+
 
-            OUTPUT,
+                OUTPUT,
             $output,
         );
     }

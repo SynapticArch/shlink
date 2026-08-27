@@ -17,16 +17,16 @@ use Shlinkio\Shlink\Core\ShortUrl\Model\UrlShorteningResult;
 use Shlinkio\Shlink\Core\ShortUrl\Repository\ShortUrlRepositoryInterface;
 use Shlinkio\Shlink\Core\ShortUrl\Resolver\ShortUrlRelationResolverInterface;
 
-class UrlShortener implements UrlShortenerInterface
+readonly class UrlShortener implements UrlShortenerInterface
 {
     public function __construct(
-        private readonly ShortUrlTitleResolutionHelperInterface $titleResolutionHelper,
-        private readonly EntityManagerInterface $em,
-        private readonly ShortUrlRelationResolverInterface $relationResolver,
-        private readonly ShortCodeUniquenessHelperInterface $shortCodeHelper,
-        private readonly EventDispatcherInterface $eventDispatcher,
-    ) {
-    }
+        private ShortUrlTitleResolutionHelperInterface $titleResolutionHelper,
+        private EntityManagerInterface $em,
+        private ShortUrlRelationResolverInterface $relationResolver,
+        private ShortCodeUniquenessHelperInterface $shortCodeHelper,
+        private EventDispatcherInterface $eventDispatcher,
+        private ShortUrlRepositoryInterface $repo,
+    ) {}
 
     /**
      * @throws NonUniqueSlugException
@@ -66,13 +66,11 @@ class UrlShortener implements UrlShortenerInterface
 
     private function findExistingShortUrlIfExists(ShortUrlCreation $creation): ShortUrl|null
     {
-        if (! $creation->findIfExists) {
+        if (!$creation->findIfExists) {
             return null;
         }
 
-        /** @var ShortUrlRepositoryInterface $repo */
-        $repo = $this->em->getRepository(ShortUrl::class);
-        return $repo->findOneMatching($creation);
+        return $this->repo->findOneMatching($creation);
     }
 
     private function verifyShortCodeUniqueness(ShortUrlCreation $meta, ShortUrl $shortUrlToBeCreated): void
@@ -82,11 +80,9 @@ class UrlShortener implements UrlShortenerInterface
             $meta->hasCustomSlug(),
         );
 
-        if (! $couldBeMadeUnique) {
-            $domain = $shortUrlToBeCreated->getDomain();
-            $domainAuthority = $domain?->authority;
-
-            throw NonUniqueSlugException::fromSlug($shortUrlToBeCreated->getShortCode(), $domainAuthority);
+        if (!$couldBeMadeUnique) {
+            $domainAuthority = $shortUrlToBeCreated->domain?->authority;
+            throw NonUniqueSlugException::fromSlug($shortUrlToBeCreated->shortCode, $domainAuthority);
         }
     }
 }

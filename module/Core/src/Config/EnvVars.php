@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Shlinkio\Shlink\Core\Config;
 
+use Shlinkio\Shlink\Core\Config\Options\ExtraPathMode;
 use Shlinkio\Shlink\Core\ShortUrl\Model\ShortUrlMode;
 
 use function date_default_timezone_get;
@@ -13,14 +14,6 @@ use function Shlinkio\Shlink\Config\env;
 use function Shlinkio\Shlink\Config\parseEnvVar;
 use function sprintf;
 
-use const Shlinkio\Shlink\DEFAULT_QR_CODE_BG_COLOR;
-use const Shlinkio\Shlink\DEFAULT_QR_CODE_COLOR;
-use const Shlinkio\Shlink\DEFAULT_QR_CODE_ENABLED_FOR_DISABLED_SHORT_URLS;
-use const Shlinkio\Shlink\DEFAULT_QR_CODE_ERROR_CORRECTION;
-use const Shlinkio\Shlink\DEFAULT_QR_CODE_FORMAT;
-use const Shlinkio\Shlink\DEFAULT_QR_CODE_MARGIN;
-use const Shlinkio\Shlink\DEFAULT_QR_CODE_ROUND_BLOCK_SIZE;
-use const Shlinkio\Shlink\DEFAULT_QR_CODE_SIZE;
 use const Shlinkio\Shlink\DEFAULT_REDIRECT_CACHE_LIFETIME;
 use const Shlinkio\Shlink\DEFAULT_REDIRECT_STATUS_CODE;
 use const Shlinkio\Shlink\DEFAULT_SHORT_CODES_LENGTH;
@@ -36,11 +29,15 @@ enum EnvVars: string
     case DB_HOST = 'DB_HOST';
     case DB_UNIX_SOCKET = 'DB_UNIX_SOCKET';
     case DB_PORT = 'DB_PORT';
+    case DB_USE_ENCRYPTION = 'DB_USE_ENCRYPTION';
     case GEOLITE_LICENSE_KEY = 'GEOLITE_LICENSE_KEY';
     case CACHE_NAMESPACE = 'CACHE_NAMESPACE';
     case REDIS_SERVERS = 'REDIS_SERVERS';
     case REDIS_SENTINEL_SERVICE = 'REDIS_SENTINEL_SERVICE';
+    case REDIS_SERVERS_USER = 'REDIS_SERVERS_USER';
+    case REDIS_SERVERS_PASSWORD = 'REDIS_SERVERS_PASSWORD';
     case REDIS_PUB_SUB_ENABLED = 'REDIS_PUB_SUB_ENABLED';
+    case MERCURE_ENABLED = 'MERCURE_ENABLED';
     case MERCURE_PUBLIC_HUB_URL = 'MERCURE_PUBLIC_HUB_URL';
     case MERCURE_INTERNAL_HUB_URL = 'MERCURE_INTERNAL_HUB_URL';
     case MERCURE_JWT_SECRET = 'MERCURE_JWT_SECRET';
@@ -55,20 +52,12 @@ enum EnvVars: string
     case MATOMO_BASE_URL = 'MATOMO_BASE_URL';
     case MATOMO_SITE_ID = 'MATOMO_SITE_ID';
     case MATOMO_API_TOKEN = 'MATOMO_API_TOKEN';
-    case DEFAULT_QR_CODE_SIZE = 'DEFAULT_QR_CODE_SIZE';
-    case DEFAULT_QR_CODE_MARGIN = 'DEFAULT_QR_CODE_MARGIN';
-    case DEFAULT_QR_CODE_FORMAT = 'DEFAULT_QR_CODE_FORMAT';
-    case DEFAULT_QR_CODE_ERROR_CORRECTION = 'DEFAULT_QR_CODE_ERROR_CORRECTION';
-    case DEFAULT_QR_CODE_ROUND_BLOCK_SIZE = 'DEFAULT_QR_CODE_ROUND_BLOCK_SIZE';
-    case QR_CODE_FOR_DISABLED_SHORT_URLS = 'QR_CODE_FOR_DISABLED_SHORT_URLS';
-    case DEFAULT_QR_CODE_COLOR = 'DEFAULT_QR_CODE_COLOR';
-    case DEFAULT_QR_CODE_BG_COLOR = 'DEFAULT_QR_CODE_BG_COLOR';
-    case DEFAULT_QR_CODE_LOGO_URL = 'DEFAULT_QR_CODE_LOGO_URL';
     case DEFAULT_INVALID_SHORT_URL_REDIRECT = 'DEFAULT_INVALID_SHORT_URL_REDIRECT';
     case DEFAULT_REGULAR_404_REDIRECT = 'DEFAULT_REGULAR_404_REDIRECT';
     case DEFAULT_BASE_URL_REDIRECT = 'DEFAULT_BASE_URL_REDIRECT';
     case REDIRECT_STATUS_CODE = 'REDIRECT_STATUS_CODE';
     case REDIRECT_CACHE_LIFETIME = 'REDIRECT_CACHE_LIFETIME';
+    case REDIRECT_CACHE_VISIBILITY = 'REDIRECT_CACHE_VISIBILITY';
     case BASE_PATH = 'BASE_PATH';
     case SHORT_URL_TRAILING_SLASH = 'SHORT_URL_TRAILING_SLASH';
     case SHORT_URL_MODE = 'SHORT_URL_MODE';
@@ -84,7 +73,7 @@ enum EnvVars: string
     case IS_HTTPS_ENABLED = 'IS_HTTPS_ENABLED';
     case DEFAULT_DOMAIN = 'DEFAULT_DOMAIN';
     case AUTO_RESOLVE_TITLES = 'AUTO_RESOLVE_TITLES';
-    case REDIRECT_APPEND_EXTRA_PATH = 'REDIRECT_APPEND_EXTRA_PATH';
+    case REDIRECT_EXTRA_PATH_MODE = 'REDIRECT_EXTRA_PATH_MODE';
     case MULTI_SEGMENT_SLUGS_ENABLED = 'MULTI_SEGMENT_SLUGS_ENABLED';
     case ROBOTS_ALLOW_ALL_SHORT_URLS = 'ROBOTS_ALLOW_ALL_SHORT_URLS';
     case ROBOTS_USER_AGENTS = 'ROBOTS_USER_AGENTS';
@@ -92,6 +81,12 @@ enum EnvVars: string
     case MEMORY_LIMIT = 'MEMORY_LIMIT';
     case INITIAL_API_KEY = 'INITIAL_API_KEY';
     case SKIP_INITIAL_GEOLITE_DOWNLOAD = 'SKIP_INITIAL_GEOLITE_DOWNLOAD';
+    case REAL_TIME_UPDATES_TOPICS = 'REAL_TIME_UPDATES_TOPICS';
+    case CORS_ALLOW_ORIGIN = 'CORS_ALLOW_ORIGIN';
+    case CORS_ALLOW_CREDENTIALS = 'CORS_ALLOW_CREDENTIALS';
+    case CORS_MAX_AGE = 'CORS_MAX_AGE';
+    case TRUSTED_PROXIES = 'TRUSTED_PROXIES';
+    case LOGS_FORMAT = 'LOGS_FORMAT';
 
     public function loadFromEnv(): mixed
     {
@@ -107,7 +102,7 @@ enum EnvVars: string
     private function loadFromFileEnv(): string|int|bool|null
     {
         $file = env(sprintf('%s_FILE', $this->value));
-        if ($file === null || ! is_file($file)) {
+        if ($file === null || !is_file($file)) {
             return null;
         }
 
@@ -121,20 +116,14 @@ enum EnvVars: string
             self::APP_ENV => 'prod',
             self::MEMORY_LIMIT => '512M',
             self::TIMEZONE => date_default_timezone_get(),
-
             self::DEFAULT_SHORT_CODES_LENGTH => DEFAULT_SHORT_CODES_LENGTH,
             self::SHORT_URL_MODE => ShortUrlMode::STRICT->value,
             self::IS_HTTPS_ENABLED, self::AUTO_RESOLVE_TITLES => true,
-            self::REDIRECT_APPEND_EXTRA_PATH,
-            self::MULTI_SEGMENT_SLUGS_ENABLED,
-            self::SHORT_URL_TRAILING_SLASH => false,
+            self::MULTI_SEGMENT_SLUGS_ENABLED, self::SHORT_URL_TRAILING_SLASH => false,
             self::DEFAULT_DOMAIN, self::BASE_PATH => '',
             self::CACHE_NAMESPACE => 'Shlink',
-
-            self::REDIS_PUB_SUB_ENABLED,
-            self::MATOMO_ENABLED,
-            self::ROBOTS_ALLOW_ALL_SHORT_URLS => false,
-
+            self::REDIRECT_EXTRA_PATH_MODE => ExtraPathMode::DEFAULT->value,
+            self::REDIS_PUB_SUB_ENABLED, self::MATOMO_ENABLED, self::ROBOTS_ALLOW_ALL_SHORT_URLS => false,
             self::DB_NAME => 'shlink',
             self::DB_HOST => self::DB_UNIX_SOCKET->loadFromEnv(),
             self::DB_DRIVER => 'sqlite',
@@ -143,31 +132,24 @@ enum EnvVars: string
                 'mssql' => '1433',
                 default => '3306',
             },
-
+            self::DB_USE_ENCRYPTION => false,
+            self::MERCURE_ENABLED => self::MERCURE_PUBLIC_HUB_URL->existsInEnv(),
             self::MERCURE_INTERNAL_HUB_URL => self::MERCURE_PUBLIC_HUB_URL->loadFromEnv(),
-
-            self::DEFAULT_QR_CODE_SIZE, => DEFAULT_QR_CODE_SIZE,
-            self::DEFAULT_QR_CODE_MARGIN, => DEFAULT_QR_CODE_MARGIN,
-            self::DEFAULT_QR_CODE_FORMAT, => DEFAULT_QR_CODE_FORMAT,
-            self::DEFAULT_QR_CODE_ERROR_CORRECTION, => DEFAULT_QR_CODE_ERROR_CORRECTION,
-            self::DEFAULT_QR_CODE_ROUND_BLOCK_SIZE, => DEFAULT_QR_CODE_ROUND_BLOCK_SIZE,
-            self::QR_CODE_FOR_DISABLED_SHORT_URLS, => DEFAULT_QR_CODE_ENABLED_FOR_DISABLED_SHORT_URLS,
-            self::DEFAULT_QR_CODE_COLOR, => DEFAULT_QR_CODE_COLOR,
-            self::DEFAULT_QR_CODE_BG_COLOR, => DEFAULT_QR_CODE_BG_COLOR,
-
             self::RABBITMQ_ENABLED, self::RABBITMQ_USE_SSL => false,
             self::RABBITMQ_PORT => 5672,
             self::RABBITMQ_VHOST => '/',
-
             self::REDIRECT_STATUS_CODE => DEFAULT_REDIRECT_STATUS_CODE->value,
             self::REDIRECT_CACHE_LIFETIME => DEFAULT_REDIRECT_CACHE_LIFETIME,
-
             self::ANONYMIZE_REMOTE_ADDR, self::TRACK_ORPHAN_VISITS => true,
             self::DISABLE_TRACKING,
             self::DISABLE_IP_TRACKING,
             self::DISABLE_REFERRER_TRACKING,
-            self::DISABLE_UA_TRACKING => false,
-
+            self::DISABLE_UA_TRACKING,
+                => false,
+            self::CORS_ALLOW_ORIGIN => '*',
+            self::CORS_ALLOW_CREDENTIALS => false,
+            self::CORS_MAX_AGE => 3600,
+            self::LOGS_FORMAT => 'console',
             default => null,
         };
     }

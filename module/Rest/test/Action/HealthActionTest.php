@@ -20,16 +20,16 @@ use Shlinkio\Shlink\Rest\Action\HealthAction;
 class HealthActionTest extends TestCase
 {
     private HealthAction $action;
-    private MockObject & Connection $conn;
+    private MockObject&Connection $conn;
 
     protected function setUp(): void
     {
         $this->conn = $this->createMock(Connection::class);
-        $dbPlatform = $this->createMock(AbstractPlatform::class);
+        $dbPlatform = $this->createStub(AbstractPlatform::class);
         $dbPlatform->method('getDummySelectSQL')->willReturn('');
         $this->conn->method('getDatabasePlatform')->willReturn($dbPlatform);
 
-        $em = $this->createMock(EntityManagerInterface::class);
+        $em = $this->createStub(EntityManagerInterface::class);
         $em->method('getConnection')->willReturn($this->conn);
 
         $this->action = new HealthAction($em, new AppOptions(version: '1.2.3'));
@@ -38,7 +38,7 @@ class HealthActionTest extends TestCase
     #[Test]
     public function passResponseIsReturnedWhenDummyQuerySucceeds(): void
     {
-        $this->conn->expects($this->once())->method('executeQuery')->willReturn($this->createMock(Result::class));
+        $this->conn->expects($this->once())->method('executeQuery')->willReturn($this->createStub(Result::class));
 
         /** @var JsonResponse $resp */
         $resp = $this->action->handle(new ServerRequest());
@@ -47,10 +47,13 @@ class HealthActionTest extends TestCase
         self::assertEquals(200, $resp->getStatusCode());
         self::assertEquals('pass', $payload['status']);
         self::assertEquals('1.2.3', $payload['version']);
-        self::assertEquals([
-            'about' => 'https://shlink.io',
-            'project' => 'https://github.com/shlinkio/shlink',
-        ], $payload['links']);
+        self::assertEquals(
+            [
+                'about' => 'https://shlink.io',
+                'project' => 'https://github.com/shlinkio/shlink',
+            ],
+            $payload['links'],
+        );
         self::assertEquals('application/health+json', $resp->getHeaderLine('Content-type'));
     }
 
@@ -66,10 +69,13 @@ class HealthActionTest extends TestCase
         self::assertEquals(503, $resp->getStatusCode());
         self::assertEquals('fail', $payload['status']);
         self::assertEquals('1.2.3', $payload['version']);
-        self::assertEquals([
-            'about' => 'https://shlink.io',
-            'project' => 'https://github.com/shlinkio/shlink',
-        ], $payload['links']);
+        self::assertEquals(
+            [
+                'about' => 'https://shlink.io',
+                'project' => 'https://github.com/shlinkio/shlink',
+            ],
+            $payload['links'],
+        );
         self::assertEquals('application/health+json', $resp->getHeaderLine('Content-type'));
     }
 }

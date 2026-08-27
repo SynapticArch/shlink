@@ -13,15 +13,10 @@ use function sprintf;
 
 class SetRedirectRulesTest extends ApiTestCase
 {
-    private const LANGUAGE_EN_CONDITION = [
+    private const array LANGUAGE_EN_CONDITION = [
         'type' => 'language',
         'matchKey' => null,
         'matchValue' => 'en',
-    ];
-    private const QUERY_FOO_BAR_CONDITION = [
-        'type' => 'query-param',
-        'matchKey' => 'foo',
-        'matchValue' => 'bar',
     ];
 
     #[Test]
@@ -39,6 +34,9 @@ class SetRedirectRulesTest extends ApiTestCase
     }
 
     #[Test]
+    #[TestWith([[
+        'redirectRules' => ['foo'],
+    ]], 'invalid data')]
     #[TestWith([[
         'redirectRules' => [
             [
@@ -96,6 +94,20 @@ class SetRedirectRulesTest extends ApiTestCase
             ],
         ],
     ]], 'invalid IP address')]
+    #[TestWith([[
+        'redirectRules' => [
+            [
+                'longUrl' => 'https://example.com',
+                'conditions' => [
+                    [
+                        'type' => 'geolocation-country-code',
+                        'matchKey' => null,
+                        'matchValue' => 'not a country code',
+                    ],
+                ],
+            ],
+        ],
+    ]], 'invalid country code')]
     public function errorIsReturnedWhenInvalidDataIsProvided(array $bodyPayload): void
     {
         $response = $this->callApiWithKey(self::METHOD_POST, '/short-urls/abc123/redirect-rules', [
@@ -112,28 +124,119 @@ class SetRedirectRulesTest extends ApiTestCase
 
     #[Test]
     #[TestWith(['def456', []])]
-    #[TestWith(['abc123', [
+    #[TestWith([
+        'abc123',
         [
-            'longUrl' => 'https://example.com/english-and-foo-query',
-            'priority' => 1,
-            'conditions' => [
-                self::LANGUAGE_EN_CONDITION,
-                self::QUERY_FOO_BAR_CONDITION,
-            ],
-        ],
-        [
-            'longUrl' => 'https://example.com/multiple-query-params',
-            'priority' => 2,
-            'conditions' => [
-                [
-                    'type' => 'query-param',
-                    'matchKey' => 'hello',
-                    'matchValue' => 'world',
+            [
+                'longUrl' => 'https://example.com/english-and-foo-query',
+                'priority' => 1,
+                'conditions' => [
+                    self::LANGUAGE_EN_CONDITION,
+                    [
+                        'type' => 'any-value-query-param',
+                        'matchKey' => 'foo',
+                        'matchValue' => null,
+                    ],
                 ],
-                self::QUERY_FOO_BAR_CONDITION,
+            ],
+            [
+                'longUrl' => 'https://example.com/multiple-query-params',
+                'priority' => 2,
+                'conditions' => [
+                    [
+                        'type' => 'query-param',
+                        'matchKey' => 'hello',
+                        'matchValue' => 'world',
+                    ],
+                    [
+                        'type' => 'query-param',
+                        'matchKey' => 'foo',
+                        'matchValue' => 'bar',
+                    ],
+                ],
             ],
         ],
-    ]])]
+    ])]
+    #[TestWith([
+        'abc123',
+        [
+            [
+                'longUrl' => 'https://example.com',
+                'priority' => 1,
+                'conditions' => [
+                    [
+                        'type' => 'ip-address',
+                        'matchKey' => null,
+                        'matchValue' => '1.2.3.4',
+                    ],
+                ],
+            ],
+        ],
+    ], 'static IP')]
+    #[TestWith([
+        'abc123',
+        [
+            [
+                'longUrl' => 'https://example.com',
+                'priority' => 1,
+                'conditions' => [
+                    [
+                        'type' => 'ip-address',
+                        'matchKey' => null,
+                        'matchValue' => '1.2.3.0/24',
+                    ],
+                ],
+            ],
+        ],
+    ], 'CIDR block')]
+    #[TestWith([
+        'abc123',
+        [
+            [
+                'longUrl' => 'https://example.com',
+                'priority' => 1,
+                'conditions' => [
+                    [
+                        'type' => 'ip-address',
+                        'matchKey' => null,
+                        'matchValue' => '1.2.3.*',
+                    ],
+                ],
+            ],
+        ],
+    ], 'IP wildcard pattern')]
+    #[TestWith([
+        'abc123',
+        [
+            [
+                'longUrl' => 'https://example.com',
+                'priority' => 1,
+                'conditions' => [
+                    [
+                        'type' => 'ip-address',
+                        'matchKey' => null,
+                        'matchValue' => '1.2.*.4',
+                    ],
+                ],
+            ],
+        ],
+    ], 'in-between IP wildcard pattern')]
+    #[TestWith([
+        'abc123',
+        [
+            [
+                'longUrl' => 'https://example.com',
+                'priority' => 1,
+                'conditions' => [
+                    [
+                        'type' => 'geolocation-country-code',
+                        'matchKey' => null,
+                        'matchValue' => 'US',
+                    ],
+                ],
+            ],
+        ],
+    ], 'country code')]
     public function setsListOfRulesForShortUrl(string $shortCode, array $expectedRules): void
     {
         $response = $this->callApiWithKey(self::METHOD_POST, sprintf('/short-urls/%s/redirect-rules', $shortCode), [

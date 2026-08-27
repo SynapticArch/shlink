@@ -13,12 +13,11 @@ jobs:
     runs-on: ubuntu-24.04
     strategy:
       matrix:
-        php-version: ['8.2', '8.3', '8.4']
-    continue-on-error: ${{ matrix.php-version == '8.4' }}
+        php-version: ['8.4', '8.5']
     env:
       LC_ALL: C
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install MSSQL ODBC
         if: ${{ inputs.platform == 'ms' }}
         run: sudo ./data/infra/ci/install-ms-odbc.sh
@@ -28,7 +27,7 @@ jobs:
       - uses: './.github/actions/ci-setup'
         with:
           php-version: ${{ matrix.php-version }}
-          php-extensions: pdo_sqlsrv-5.12.0
+          php-extensions: pdo_sqlsrv-5.13.0
           extensions-cache-key: db-tests-extensions-${{ matrix.php-version }}-${{ inputs.platform }}
       - name: Create test database
         if: ${{ inputs.platform == 'ms' }}
@@ -36,8 +35,8 @@ jobs:
       - name: Run tests
         run: composer test:db:${{ inputs.platform }}
       - name: Upload code coverage
-        uses: actions/upload-artifact@v4
-        if: ${{ matrix.php-version == '8.3' && inputs.platform == 'sqlite:ci' }}
+        uses: actions/upload-artifact@v7
+        if: ${{ matrix.php-version == '8.4' && inputs.platform == 'sqlite:ci' }}
         with:
           name: coverage-db
           path: |

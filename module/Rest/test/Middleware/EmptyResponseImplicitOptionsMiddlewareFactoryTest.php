@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace ShlinkioTest\Shlink\Rest\Middleware;
 
 use Laminas\Diactoros\Response\EmptyResponse;
-use Mezzio\Router\Middleware\ImplicitOptionsMiddleware;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 use Psr\Http\Message\ResponseFactoryInterface;
@@ -22,20 +21,12 @@ class EmptyResponseImplicitOptionsMiddlewareFactoryTest extends TestCase
     }
 
     #[Test]
-    public function serviceIsCreated(): void
-    {
-        $instance = ($this->factory)();
-        self::assertInstanceOf(ImplicitOptionsMiddleware::class, $instance);
-    }
-
-    #[Test]
     public function responsePrototypeIsEmptyResponse(): void
     {
         $instance = ($this->factory)();
 
         $ref = new ReflectionObject($instance);
         $prop = $ref->getProperty('responseFactory');
-        $prop->setAccessible(true);
 
         /** @var ResponseFactoryInterface $value */
         $value = $prop->getValue($instance);

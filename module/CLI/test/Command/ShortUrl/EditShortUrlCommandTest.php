@@ -1,51 +1,63 @@
 <?php
 
+declare(strict_types=1);
+
 namespace ShlinkioTest\Shlink\CLI\Command\ShortUrl;
 
+use CuyZ\Valinor\MapperBuilder;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\Attributes\TestWith;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 use Shlinkio\Shlink\CLI\Command\ShortUrl\EditShortUrlCommand;
-use Shlinkio\Shlink\CLI\Util\ExitCode;
 use Shlinkio\Shlink\Core\Exception\ShortUrlNotFoundException;
 use Shlinkio\Shlink\Core\ShortUrl\Entity\ShortUrl;
 use Shlinkio\Shlink\Core\ShortUrl\Helper\ShortUrlStringifierInterface;
+use Shlinkio\Shlink\Core\ShortUrl\Model\ShortUrlEdition;
 use Shlinkio\Shlink\Core\ShortUrl\Model\ShortUrlIdentifier;
 use Shlinkio\Shlink\Core\ShortUrl\ShortUrlServiceInterface;
 use ShlinkioTest\Shlink\CLI\Util\CliTestUtils;
+use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Tester\CommandTester;
 
 class EditShortUrlCommandTest extends TestCase
 {
     private CommandTester $commandTester;
-    private MockObject & ShortUrlServiceInterface $shortUrlService;
-    private MockObject & ShortUrlStringifierInterface $stringifier;
+    private MockObject&ShortUrlServiceInterface $shortUrlService;
+    private MockObject&ShortUrlStringifierInterface $stringifier;
 
     protected function setUp(): void
     {
         $this->shortUrlService = $this->createMock(ShortUrlServiceInterface::class);
         $this->stringifier = $this->createMock(ShortUrlStringifierInterface::class);
 
-        $command = new EditShortUrlCommand($this->shortUrlService, $this->stringifier);
+        $command = new EditShortUrlCommand($this->shortUrlService, $this->stringifier, new MapperBuilder()->mapper());
         $this->commandTester = CliTestUtils::testerForCommand($command);
     }
 
     #[Test]
     public function successMessageIsPrintedIfNoErrorOccurs(): void
     {
-        $this->shortUrlService->expects($this->once())->method('updateShortUrl')->willReturn(
-            ShortUrl::createFake(),
-        );
+        $newLongUrl = 'https://example.com';
+        $this->shortUrlService
+            ->expects($this->once())
+            ->method('updateShortUrl')
+            ->with(
+                ShortUrlIdentifier::fromShortCodeAndDomain('foobar'),
+                $this->callback(static fn (ShortUrlEdition $edition): bool => $edition->longUrl === $newLongUrl),
+            )
+            ->willReturn(
+                ShortUrl::createFake(),
+            );
         $this->stringifier->expects($this->once())->method('stringify')->willReturn('https://s.test/foo');
 
-        $this->commandTester->execute(['shortCode' => 'foobar']);
+        $this->commandTester->execute(['short-code' => 'foobar', '--long-url' => $newLongUrl]);
         $output = $this->commandTester->getDisplay();
         $exitCode = $this->commandTester->getStatusCode();
 
         self::assertStringContainsString('Short URL "https://s.test/foo" properly edited', $output);
-        self::assertEquals(ExitCode::EXIT_SUCCESS, $exitCode);
+        self::assertEquals(Command::SUCCESS, $exitCode);
     }
 
     #[Test]
@@ -59,7 +71,7 @@ class EditShortUrlCommandTest extends TestCase
         $this->shortUrlService->expects($this->once())->method('updateShortUrl')->willThrowException($e);
         $this->stringifier->expects($this->never())->method('stringify');
 
-        $this->commandTester->execute(['shortCode' => 'foo'], ['verbosity' => $verbosity]);
+        $this->commandTester->execute(['short-code' => 'foo'], ['verbosity' => $verbosity]);
         $output = $this->commandTester->getDisplay();
         $exitCode = $this->commandTester->getStatusCode();
 
@@ -69,6 +81,6 @@ class EditShortUrlCommandTest extends TestCase
         } else {
             self::assertStringNotContainsString('Exception trace:', $output);
         }
-        self::assertEquals(ExitCode::EXIT_FAILURE, $exitCode);
+        self::assertEquals(Command::FAILURE, $exitCode);
     }
 }

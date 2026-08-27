@@ -8,6 +8,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
+use Shlinkio\Shlink\Core\Config\Options\UrlShortenerOptions;
 use Shlinkio\Shlink\Core\Visit\Entity\Visit;
 use Shlinkio\Shlink\Core\Visit\Model\OrphanVisitsParams;
 use Shlinkio\Shlink\Core\Visit\Model\Visitor;
@@ -20,26 +21,35 @@ use Shlinkio\Shlink\Rest\Entity\ApiKey;
 class OrphanVisitsPaginatorAdapterTest extends TestCase
 {
     private OrphanVisitsPaginatorAdapter $adapter;
-    private MockObject & VisitRepositoryInterface $repo;
+    private MockObject&VisitRepositoryInterface $repo;
     private OrphanVisitsParams $params;
     private ApiKey $apiKey;
 
     protected function setUp(): void
     {
         $this->repo = $this->createMock(VisitRepositoryInterface::class);
-        $this->params = OrphanVisitsParams::fromRawData([]);
+        $this->params = new OrphanVisitsParams();
         $this->apiKey = ApiKey::create();
 
-        $this->adapter = new OrphanVisitsPaginatorAdapter($this->repo, $this->params, $this->apiKey);
+        $this->adapter = new OrphanVisitsPaginatorAdapter(
+            $this->repo,
+            $this->params,
+            $this->apiKey,
+            new UrlShortenerOptions(),
+        );
     }
 
     #[Test]
     public function countDelegatesToRepository(): void
     {
         $expectedCount = 5;
-        $this->repo->expects($this->once())->method('countOrphanVisits')->with(
-            new OrphanVisitsCountFiltering($this->params->dateRange, apiKey: $this->apiKey),
-        )->willReturn($expectedCount);
+        $this->repo
+            ->expects($this->once())
+            ->method('countOrphanVisits')
+            ->with(
+                new OrphanVisitsCountFiltering($this->params->dateRange, apiKey: $this->apiKey),
+            )
+            ->willReturn($expectedCount);
 
         $result = $this->adapter->getNbResults();
 
@@ -53,15 +63,19 @@ class OrphanVisitsPaginatorAdapterTest extends TestCase
     #[Test, DataProvider('provideLimitAndOffset')]
     public function getSliceDelegatesToRepository(int $limit, int $offset): void
     {
-        $visitor = Visitor::emptyInstance();
+        $visitor = Visitor::empty();
         $list = [Visit::forRegularNotFound($visitor), Visit::forInvalidShortUrl($visitor)];
-        $this->repo->expects($this->once())->method('findOrphanVisits')->with(new OrphanVisitsListFiltering(
-            dateRange: $this->params->dateRange,
-            excludeBots: $this->params->excludeBots,
-            apiKey: $this->apiKey,
-            limit: $limit,
-            offset: $offset,
-        ))->willReturn($list);
+        $this->repo
+            ->expects($this->once())
+            ->method('findOrphanVisits')
+            ->with(new OrphanVisitsListFiltering(
+                dateRange: $this->params->dateRange,
+                excludeBots: $this->params->excludeBots,
+                apiKey: $this->apiKey,
+                limit: $limit,
+                offset: $offset,
+            ))
+            ->willReturn($list);
 
         $result = $this->adapter->getSlice($offset, $limit);
 

@@ -22,7 +22,7 @@ use function count;
 class PersistenceShortUrlRelationResolverTest extends TestCase
 {
     private PersistenceShortUrlRelationResolver $resolver;
-    private MockObject & EntityManagerInterface $em;
+    private MockObject&EntityManagerInterface $em;
 
     protected function setUp(): void
     {
@@ -77,16 +77,23 @@ class PersistenceShortUrlRelationResolverTest extends TestCase
         $expectedPersistedTags = $expectedLookedOutTags - 1;
 
         $tagRepo = $this->createMock(TagRepository::class);
-        $tagRepo->expects($this->exactly($expectedLookedOutTags))->method('findOneBy')->with(
-            $this->isType('array'),
-        )->willReturnCallback(function (array $criteria): Tag|null {
-            ['name' => $name] = $criteria;
-            return $name === 'foo' ? new Tag($name) : null;
-        });
+        $tagRepo
+            ->expects($this->exactly($expectedLookedOutTags))
+            ->method('findOneBy')
+            ->with(
+                $this->isArray(),
+            )
+            ->willReturnCallback(static function (array $criteria): Tag|null {
+                ['name' => $name] = $criteria;
+                return $name === 'foo' ? new Tag($name) : null;
+            });
         $this->em->expects($this->once())->method('getRepository')->with(Tag::class)->willReturn($tagRepo);
-        $this->em->expects($this->exactly($expectedPersistedTags))->method('persist')->with(
-            $this->isInstanceOf(Tag::class),
-        );
+        $this->em
+            ->expects($this->exactly($expectedPersistedTags))
+            ->method('persist')
+            ->with(
+                $this->isInstanceOf(Tag::class),
+            );
 
         $result = $this->resolver->resolveTags($tags);
 
@@ -115,8 +122,8 @@ class PersistenceShortUrlRelationResolverTest extends TestCase
     public function newDomainsAreMemoizedUntilStateIsCleared(): void
     {
         $repo = $this->createMock(DomainRepository::class);
-        $repo->expects($this->exactly(3))->method('findOneBy')->with($this->isType('array'))->willReturn(null);
-        $this->em->method('getRepository')->with(Domain::class)->willReturn($repo);
+        $repo->expects($this->exactly(3))->method('findOneBy')->with($this->isArray())->willReturn(null);
+        $this->em->expects($this->atLeastOnce())->method('getRepository')->willReturn($repo);
 
         $authority = 'foo.com';
         $domain1 = $this->resolver->resolveDomain($authority);
@@ -134,8 +141,8 @@ class PersistenceShortUrlRelationResolverTest extends TestCase
     public function newTagsAreMemoizedUntilStateIsCleared(): void
     {
         $tagRepo = $this->createMock(TagRepository::class);
-        $tagRepo->expects($this->exactly(6))->method('findOneBy')->with($this->isType('array'))->willReturn(null);
-        $this->em->method('getRepository')->with(Tag::class)->willReturn($tagRepo);
+        $tagRepo->expects($this->exactly(6))->method('findOneBy')->with($this->isArray())->willReturn(null);
+        $this->em->expects($this->atLeastOnce())->method('getRepository')->willReturn($tagRepo);
 
         $tags = ['foo', 'bar'];
         [$foo1, $bar1] = $this->resolver->resolveTags($tags);

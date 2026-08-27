@@ -13,12 +13,10 @@ use Shlinkio\Shlink\Rest\Middleware\AuthenticationMiddleware;
 
 class DeleteOrphanVisitsAction extends AbstractRestAction
 {
-    protected const ROUTE_PATH = '/visits/orphan';
-    protected const ROUTE_ALLOWED_METHODS = [self::METHOD_DELETE];
+    protected const string ROUTE_PATH = '/visits/orphan';
+    protected const array ROUTE_ALLOWED_METHODS = [self::METHOD_DELETE];
 
-    public function __construct(private readonly VisitsDeleterInterface $visitsDeleter)
-    {
-    }
+    public function __construct(private readonly VisitsDeleterInterface $visitsDeleter) {}
 
     public function handle(ServerRequestInterface $request): ResponseInterface
     {

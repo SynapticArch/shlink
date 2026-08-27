@@ -4,73 +4,71 @@ declare(strict_types=1);
 
 namespace Shlinkio\Shlink\CLI\Command\Visit;
 
-use Shlinkio\Shlink\CLI\Exception\GeolocationDbUpdateFailedException;
-use Shlinkio\Shlink\CLI\GeoLite\GeolocationDbUpdaterInterface;
-use Shlinkio\Shlink\CLI\GeoLite\GeolocationResult;
-use Shlinkio\Shlink\CLI\Util\ExitCode;
+use Shlinkio\Shlink\Core\Exception\GeolocationDbUpdateFailedException;
+use Shlinkio\Shlink\Core\Geolocation\GeolocationDbUpdaterInterface;
+use Shlinkio\Shlink\Core\Geolocation\GeolocationDownloadProgressHandlerInterface;
+use Shlinkio\Shlink\Core\Geolocation\GeolocationResult;
+use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Helper\ProgressBar;
-use Symfony\Component\Console\Input\InputInterface;
-use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
 use function sprintf;
 
-class DownloadGeoLiteDbCommand extends Command
+#[AsCommand(
+    DownloadGeoLiteDbCommand::NAME,
+    'Checks if the GeoLite2 db file is too old or it does not exist, and tries to download an up-to-date copy if so',
+)]
+class DownloadGeoLiteDbCommand extends Command implements GeolocationDownloadProgressHandlerInterface
 {
-    public const NAME = 'visit:download-db';
+    public const string NAME = 'visit:download-db';
 
     private ProgressBar|null $progressBar = null;
+    private SymfonyStyle $io;
 
-    public function __construct(private GeolocationDbUpdaterInterface $dbUpdater)
+    public function __construct(private readonly GeolocationDbUpdaterInterface $dbUpdater)
     {
         parent::__construct();
     }
 
-    protected function configure(): void
+    public function __invoke(SymfonyStyle $io): int
     {
-        $this
-            ->setName(self::NAME)
-            ->setDescription(
-                'Checks if the GeoLite2 db file is too old or it does not exist, and tries to download an up-to-date '
-                . 'copy if so.',
-            );
-    }
-
-    protected function execute(InputInterface $input, OutputInterface $output): int
-    {
-        $io = new SymfonyStyle($input, $output);
+        $this->io = $io;
 
         try {
-            $result = $this->dbUpdater->checkDbUpdate(function (bool $olderDbExists) use ($io): void {
-                $io->text(sprintf('<fg=blue>%s GeoLite2 db file...</>', $olderDbExists ? 'Updating' : 'Downloading'));
-                $this->progressBar = new ProgressBar($io);
-            }, function (int $total, int $downloaded): void {
-                $this->progressBar?->setMaxSteps($total);
-                $this->progressBar?->setProgress($downloaded);
-            });
+            $result = $this->dbUpdater->checkDbUpdate($this);
 
             if ($result === GeolocationResult::LICENSE_MISSING) {
-                $io->warning('It was not possible to download GeoLite2 db, because a license was not provided.');
-                return ExitCode::EXIT_WARNING;
+                $this->io->warning('It was not possible to download GeoLite2 db, because a license was not provided.');
+                return self::INVALID;
+            }
+
+            if ($result === GeolocationResult::MAX_ERRORS_REACHED) {
+                $this->io->warning('Max consecutive errors reached. Cannot retry for a couple of days.');
+                return self::INVALID;
+            }
+
+            if ($result === GeolocationResult::UPDATE_IN_PROGRESS) {
+                $this->io->warning('A geolocation db is already being downloaded by another process.');
+                return self::INVALID;
             }
 
             if ($this->progressBar === null) {
-                $io->info('GeoLite2 db file is up to date.');
+                $this->io->info('GeoLite2 db file is up to date.');
             } else {
                 $this->progressBar->finish();
-                $io->success('GeoLite2 db file properly downloaded.');
+                $this->io->success('GeoLite2 db file properly downloaded.');
             }
 
-            return ExitCode::EXIT_SUCCESS;
+            return self::SUCCESS;
         } catch (GeolocationDbUpdateFailedException $e) {
-            return $this->processGeoLiteUpdateError($e, $io);
+            return $this->processGeoLiteUpdateError($e, $this->io);
         }
     }
 
     private function processGeoLiteUpdateError(GeolocationDbUpdateFailedException $e, SymfonyStyle $io): int
     {
-        $olderDbExists = $e->olderDbExists();
+        $olderDbExists = $e->olderDbExists;
 
         if ($olderDbExists) {
             $io->warning(
@@ -84,6 +82,18 @@ class DownloadGeoLiteDbCommand extends Command
             $this->getApplication()?->renderThrowable($e, $io);
         }
 
-        return $olderDbExists ? ExitCode::EXIT_WARNING : ExitCode::EXIT_FAILURE;
+        return $olderDbExists ? self::INVALID : self::FAILURE;
+    }
+
+    public function beforeDownload(bool $olderDbExists): void
+    {
+        $this->io->text(sprintf('<fg=blue>%s GeoLite2 db file...</>', $olderDbExists ? 'Updating' : 'Downloading'));
+        $this->progressBar = new ProgressBar($this->io);
+    }
+
+    public function handleProgress(int $total, int $downloaded, bool $olderDbExists): void
+    {
+        $this->progressBar?->setMaxSteps($total);
+        $this->progressBar?->setProgress($downloaded);
     }
 }

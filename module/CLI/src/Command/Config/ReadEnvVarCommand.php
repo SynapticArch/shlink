@@ -5,13 +5,13 @@ declare(strict_types=1);
 namespace Shlinkio\Shlink\CLI\Command\Config;
 
 use Closure;
-use Shlinkio\Shlink\CLI\Util\ExitCode;
 use Shlinkio\Shlink\Core\Config\EnvVars;
+use Symfony\Component\Console\Attribute\Argument;
+use Symfony\Component\Console\Attribute\AsCommand;
+use Symfony\Component\Console\Attribute\Interact;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Exception\InvalidArgumentException;
-use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
-use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
 use function Shlinkio\Shlink\Config\formatEnvVarValue;
@@ -19,9 +19,14 @@ use function Shlinkio\Shlink\Core\ArrayUtils\contains;
 use function Shlinkio\Shlink\Core\enumValues;
 use function sprintf;
 
+#[AsCommand(
+    name: ReadEnvVarCommand::NAME,
+    description: 'Display current value for an env var',
+    hidden: true,
+)]
 class ReadEnvVarCommand extends Command
 {
-    public const NAME = 'env-var:read';
+    public const string NAME = 'env-var:read';
 
     /** @var Closure(string $envVar): mixed */
     private readonly Closure $loadEnvVar;
@@ -32,37 +37,29 @@ class ReadEnvVarCommand extends Command
         parent::__construct();
     }
 
-    protected function configure(): void
+    #[Interact]
+    public function askMissing(InputInterface $input, SymfonyStyle $io): void
     {
-        $this
-            ->setName(self::NAME)
-            ->setHidden()
-            ->setDescription('Display current value for an env var')
-            ->addArgument('envVar', InputArgument::REQUIRED, 'The env var to read');
-    }
-
-    protected function interact(InputInterface $input, OutputInterface $output): void
-    {
-        $io = new SymfonyStyle($input, $output);
-        $envVar = $input->getArgument('envVar');
+        /** @var string|null $envVar */
+        $envVar = $input->getArgument('env-var');
         $validEnvVars = enumValues(EnvVars::class);
 
         if ($envVar === null) {
             $envVar = $io->choice('Select the env var to read', $validEnvVars);
         }
 
-        if (! contains($envVar, $validEnvVars)) {
+        if (!contains($envVar, $validEnvVars)) {
             throw new InvalidArgumentException(sprintf('%s is not a valid Shlink environment variable', $envVar));
         }
 
-        $input->setArgument('envVar', $envVar);
+        $input->setArgument('env-var', $envVar);
     }
 
-    protected function execute(InputInterface $input, OutputInterface $output): int
-    {
-        $envVar = $input->getArgument('envVar');
-        $output->writeln(formatEnvVarValue(($this->loadEnvVar)($envVar)));
-
-        return ExitCode::EXIT_SUCCESS;
+    public function __invoke(
+        SymfonyStyle $io,
+        #[Argument(description: 'The env var to read')] string $envVar,
+    ): int {
+        $io->writeln(formatEnvVarValue(($this->loadEnvVar)($envVar)));
+        return Command::SUCCESS;
     }
 }

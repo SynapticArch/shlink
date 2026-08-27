@@ -30,7 +30,7 @@ class ShortUrlVisitsCountTrackerTest extends DatabaseTestCase
         $shortUrl = ShortUrl::createFake();
         $this->getEntityManager()->persist($shortUrl);
 
-        $visit = Visit::forValidShortUrl($shortUrl, Visitor::emptyInstance());
+        $visit = Visit::forValidShortUrl($shortUrl, Visitor::empty());
         $this->getEntityManager()->persist($visit);
         $this->getEntityManager()->flush();
 
@@ -54,7 +54,7 @@ class ShortUrlVisitsCountTrackerTest extends DatabaseTestCase
         }
         $this->getEntityManager()->flush();
 
-        $visit = Visit::forValidShortUrl($shortUrl, Visitor::emptyInstance());
+        $visit = Visit::forValidShortUrl($shortUrl, Visitor::empty());
         $this->getEntityManager()->persist($visit);
         $this->getEntityManager()->flush();
 
@@ -66,7 +66,7 @@ class ShortUrlVisitsCountTrackerTest extends DatabaseTestCase
         $result = $this->repo->findBy(['shortUrl' => $shortUrl]);
         $itemsWithCountBiggerThanOnce = array_values(array_filter(
             $result,
-            static fn (ShortUrlVisitsCount $item) => ((int) $item->count) > 1,
+            static fn (ShortUrlVisitsCount $item) => (int) $item->count > 1,
         ));
 
         self::assertCount(101, $result);

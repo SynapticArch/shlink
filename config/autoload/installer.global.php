@@ -8,11 +8,11 @@ use Shlinkio\Shlink\Installer\Config\Option;
 use Shlinkio\Shlink\Installer\Util\InstallationCommand;
 
 return [
-
     'installer' => [
         'enabled_options' => [
             Option\Server\RuntimeConfigOption::class,
             Option\Server\MemoryLimitConfigOption::class,
+            Option\Server\LogsFormatConfigOption::class,
             Option\Database\DatabaseDriverConfigOption::class,
             Option\Database\DatabaseNameConfigOption::class,
             Option\Database\DatabaseHostConfigOption::class,
@@ -20,6 +20,7 @@ return [
             Option\Database\DatabaseUserConfigOption::class,
             Option\Database\DatabasePasswordConfigOption::class,
             Option\Database\DatabaseUnixSocketConfigOption::class,
+            Option\Database\DatabaseUseEncryptionConfigOption::class,
             Option\UrlShortener\ShortDomainHostConfigOption::class,
             Option\UrlShortener\ShortDomainSchemaConfigOption::class,
             Option\Redirect\BaseUrlRedirectConfigOption::class,
@@ -31,6 +32,8 @@ return [
             Option\Cache\CacheNamespaceConfigOption::class,
             Option\Redis\RedisServersConfigOption::class,
             Option\Redis\RedisSentinelServiceConfigOption::class,
+            Option\Redis\RedisServersUserConfigOption::class,
+            Option\Redis\RedisServersPasswordConfigOption::class,
             Option\Redis\RedisPubSubConfigOption::class,
             Option\UrlShortener\ShortCodeLengthOption::class,
             Option\Mercure\EnableMercureConfigOption::class,
@@ -40,8 +43,9 @@ return [
             Option\UrlShortener\GeoLiteLicenseKeyConfigOption::class,
             Option\UrlShortener\RedirectStatusCodeConfigOption::class,
             Option\UrlShortener\RedirectCacheLifeTimeConfigOption::class,
+            Option\UrlShortener\RedirectCacheVisibilityConfigOption::class,
             Option\UrlShortener\AutoResolveTitlesConfigOption::class,
-            Option\UrlShortener\AppendExtraPathConfigOption::class,
+            Option\UrlShortener\ExtraPathModeConfigOption::class,
             Option\UrlShortener\EnableMultiSegmentSlugsConfigOption::class,
             Option\UrlShortener\EnableTrailingSlashConfigOption::class,
             Option\UrlShortener\ShortUrlModeConfigOption::class,
@@ -55,15 +59,6 @@ return [
             Option\Tracking\DisableIpTrackingConfigOption::class,
             Option\Tracking\DisableReferrerTrackingConfigOption::class,
             Option\Tracking\DisableUaTrackingConfigOption::class,
-            Option\QrCode\DefaultSizeConfigOption::class,
-            Option\QrCode\DefaultMarginConfigOption::class,
-            Option\QrCode\DefaultFormatConfigOption::class,
-            Option\QrCode\DefaultErrorCorrectionConfigOption::class,
-            Option\QrCode\DefaultRoundBlockSizeConfigOption::class,
-            Option\QrCode\DefaultColorConfigOption::class,
-            Option\QrCode\DefaultBgColorConfigOption::class,
-            Option\QrCode\DefaultLogoUrlConfigOption::class,
-            Option\QrCode\EnabledForDisabledShortUrlsConfigOption::class,
             Option\RabbitMq\RabbitMqEnabledConfigOption::class,
             Option\RabbitMq\RabbitMqHostConfigOption::class,
             Option\RabbitMq\RabbitMqUseSslConfigOption::class,
@@ -75,6 +70,11 @@ return [
             Option\Matomo\MatomoBaseUrlConfigOption::class,
             Option\Matomo\MatomoSiteIdConfigOption::class,
             Option\Matomo\MatomoApiTokenConfigOption::class,
+            Option\RealTimeUpdates\RealTimeUpdatesTopicsConfigOption::class,
+            Option\Cors\CorsAllowOriginConfigOption::class,
+            Option\Cors\CorsAllowCredentialsConfigOption::class,
+            Option\Cors\CorsMaxAgeConfigOption::class,
+            Option\TrustedProxiesConfigOption::class,
         ],
 
         'installation_commands' => [
@@ -101,5 +101,4 @@ return [
             ],
         ],
     ],
-
 ];
