@@ -18,6 +18,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com), and this 
 * *Nothing*
 
 ### Fixed
+* [#2657](https://github.com/shlinkio/shlink/issues/2657) Fix 500 error returned when visiting a short URL with invalid UTF-8 bytes in the short code while using Postgres.
+
+
+## [5.1.8] - 2026-10-21
+### Added
+* *Nothing*
+
+### Changed
+* *Nothing*
+
+### Deprecated
+* *Nothing*
+
+### Removed
+* *Nothing*
+
+### Fixed
 * [#2678](https://github.com/shlinkio/shlink/issues/2678) Update docker images to Alpine 3.24, so that they get PHP security updates again, including the fix for CVE-2026-109618 and CVE-2026-109619.
 
 
